@@ -26,7 +26,7 @@ pub struct Conversation {
     pub title: Option<String>,
     pub participants: Vec<Ulid>,
     pub created_at: String,
-    pub last_massage_id: Option<Ulid>,
+    pub last_message_id: Ulid,
     pub updated_at: String,
 }
 

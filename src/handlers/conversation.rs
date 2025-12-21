@@ -7,57 +7,82 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::Utc;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use crate::{
     AppState,
     error::AppError,
-    models::{Conversation, ConverstaionKind},
+    models::{Conversation, ConverstaionKind, Message, MessageKind},
 };
 
 #[derive(Debug, Deserialize)]
-pub struct CreateConversation {
-    kind: ConverstaionKind,
-    title: Option<String>,
+pub struct CreateConversationRequest {
+    conversation_type: ConverstaionKind,
+    message_type: MessageKind,
+    first_message: String,
+    sender_id: Ulid,
     participants: Vec<Ulid>,
+    title: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct CreateConversationResponse {
+    pub id: Ulid,
+    #[serde(rename = "type")]
+    pub kind: ConverstaionKind,
+    pub title: Option<String>,
+    pub participants: Vec<Ulid>,
+    pub first_message: Message,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 pub async fn create_conversation(
     State(state): State<Arc<AppState>>,
-    Json(input): Json<CreateConversation>,
+    Json(input): Json<CreateConversationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    let conversation_id = Ulid::new();
+    let message_id = Ulid::new();
+
     let conversation = Conversation {
-        id: Ulid::new(),
-        kind: input.kind,
+        id: conversation_id,
+        kind: input.conversation_type,
         title: input.title,
         participants: input.participants,
+        last_message_id: message_id,
         created_at: Utc::now().to_string(),
-        last_massage_id: None,
         updated_at: Utc::now().to_string(),
+    };
+
+    let message = Message {
+        id: message_id,
+        conversation_id: conversation_id,
+        sender_id: input.sender_id,
+        content: input.first_message,
+        kind: input.message_type,
+        created_at: Utc::now().to_string(),
+        updated_at: None,
     };
 
     state
         .conversations
         .write()?
-        .insert(conversation.id, conversation.clone());
+        .insert(conversation_id, conversation.clone());
 
-    // I think this goes someware else
-    // for participant in conversation.participants.iter() {
-    //     let user_conversation = UserConversation {
-    //         conversation_id: conversation.id,
-    //         userid: participant.clone(),
-    //         last_read_message_id: None,
-    //         unread_count: 0,
-    //     };
+    state.messages.write()?.insert(message_id, message.clone());
 
-    //     state
-    //         .user_conversations
-    //         .write()?
-    //         .insert(user_conversation.userid, user_conversation);
-    // }
+    let response = CreateConversationResponse {
+        id: conversation.id,
+        kind: conversation.kind.clone(),
+        title: conversation.title.clone(),
+        participants: conversation.participants.clone(),
+        first_message: message.clone(),
+        created_at: conversation.created_at.clone(),
+        updated_at: conversation.updated_at.clone(),
+    };
 
-    Ok((StatusCode::CREATED, Json(conversation)))
+    Ok((StatusCode::CREATED, Json(response)))
 }
 
 pub async fn get_conversation(
@@ -74,17 +99,17 @@ pub async fn get_conversation(
     Ok(Json(conversation))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct QueryConversation {
     pub conversation_id: Ulid,
     pub title: Option<String>,
     pub participants: Vec<Ulid>,
-    pub last_massage: LastMessage,
+    pub last_message: LastMessage,
     pub unread_count: u32,
     pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct LastMessage {
     pub message_id: Ulid,
     pub sender_id: Ulid,
@@ -113,7 +138,7 @@ pub async fn query_users_conversations(
 pub struct UpdateChat {
     title: Option<String>,
     participants: Option<Vec<Ulid>>,
-    last_massage_id: Option<Ulid>,
+    last_message_id: Option<Ulid>,
 }
 
 pub async fn update_conversation(
@@ -144,8 +169,8 @@ pub async fn update_conversation(
         }
     }
 
-    if let Some(last_message_id) = input.last_massage_id {
-        conversation.last_massage_id = Some(last_message_id);
+    if let Some(last_message_id) = input.last_message_id {
+        conversation.last_message_id = last_message_id;
         updated = true;
     }
 

@@ -1,5 +1,9 @@
 export interface Message {
-  chat_id: string;
-  body: string;
-  timestamp: string;
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  content: string;
+  type: 'text' | 'image';
+  createdAt: string;
+  updatedAt: string;
 }

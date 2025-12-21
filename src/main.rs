@@ -50,7 +50,7 @@ async fn main() {
     });
 
     let http_routes = Router::new()
-        .route("/api/v1/message", post(create_conversation))
+        .route("/api/v1/conversation", post(create_conversation))
         .route(
             "/api/v1/conversation/{id}",
             get(get_conversation)

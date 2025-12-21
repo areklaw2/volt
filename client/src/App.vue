@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import ChatClient from './components/ChatClient.vue';
+import ChatLayout from './components/ChatLayout.vue';
 </script>
 
 <template>
-  <ChatClient msg="Volt" />
+  <ChatLayout />
 </template>
 
-<style scoped>
+<style>
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  min-height: 100vh;
-  padding: 20px;
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
 }
 </style>
