@@ -1,20 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, nextTick } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { env } from '@/env';
-import Log from './Log.vue';
-import type { LogEntry } from '@/types/log';
 import type { Message } from '@/types/message';
 
 const socket = ref<WebSocket | null>(null);
 const isConnected = ref(false);
-const logs = ref<LogEntry[]>([]);
-const logsContainer = ref<HTMLDivElement | null>(null);
 
-const serverUrl = ref('http://localhost:3000');
-const echoInput = ref('');
+const serverUrl = 'http://localhost:3000';
 const messageInput = ref('');
-
-let logIdCounter = 0;
+const usernameInput = ref('');
 
 defineProps<{ msg: string }>();
 
@@ -26,50 +20,35 @@ function close(reason: number, message: string) {
 }
 
 function connect() {
-  addLog(`Connected to ${serverUrl.value}`, 'connect');
+  if (!usernameInput.value) {
+    return;
+  }
+
+  console.log(`Connected to ${serverUrl}`, 'connect');
   socket.value = new WebSocket(env.SOCKET_URL);
 
   socket.value.onopen = () => {
-    addLog('Connected to server!', 'connect');
+    socket.value?.send(usernameInput.value);
     isConnected.value = true;
   };
 
   socket.value.onmessage = (event) => {
-    addLog(`Received: ${event.data}`, 'message');
+    console.log(`Received: ${event.data}`, 'message');
   };
 
   socket.value.onerror = (error) => {
-    addLog('WebSocket error occurred', 'error');
+    console.log('WebSocket error occurred', 'error');
     console.log(error);
   };
 
   socket.value.onclose = () => {
     isConnected.value = false;
-    addLog('Disconnected from server', 'disconnect');
+    console.log('Disconnected from server', 'disconnect');
   };
 }
 
 function disconnect() {
   close(1000, 'Client disconnected');
-}
-
-function sendEcho() {
-  if (!echoInput.value) {
-    return;
-  }
-
-  const echo: Message = {
-    type: 'echo',
-    body: echoInput.value,
-  };
-  socket.value?.send(JSON.stringify(echo));
-}
-
-function getStatus() {
-  const status: Message = {
-    type: 'status',
-  };
-  socket.value?.send(JSON.stringify(status));
 }
 
 function sendMessage() {
@@ -78,32 +57,14 @@ function sendMessage() {
   }
 
   const message: Message = {
-    type: 'chat',
+    chat_id: 'chat_id',
     body: messageInput.value,
-    chat_id: 'chat',
+    timestamp: new Date().toISOString(),
   };
   socket.value?.send(JSON.stringify(message));
 }
 
-function addLog(message: string, type: LogEntry['type'] = 'info') {
-  const timestamp = new Date().toLocaleTimeString();
-  logs.value.push({
-    id: logIdCounter++,
-    message,
-    type,
-    timestamp,
-  });
-
-  nextTick(() => {
-    if (logsContainer.value) {
-      logsContainer.value.scrollTop = logsContainer.value.scrollHeight;
-    }
-  });
-}
-
-onMounted(() => {
-  addLog('Client loaded. Enter server URL and click Connect.', 'info');
-});
+onMounted(() => {});
 
 onUnmounted(() => {
   close(1001, 'Client closed page');
@@ -133,55 +94,21 @@ onUnmounted(() => {
       <div class="panel">
         <h3>Connection Controls</h3>
         <div class="control-group">
-          <label for="serverUrl">Server URL</label>
-          <input type="text" v-model="serverUrl" />
+          <label for="serverUrl">User Name</label>
+          <input type="text" v-model="usernameInput" />
         </div>
         <div class="button-group">
           <button class="btn-success" @click="connect" :disabled="isConnected">
-            Connect
+            Join Chat
           </button>
           <button
             class="btn-danger"
             @click="disconnect"
             :disabled="!isConnected"
           >
-            Disconnect
+            Leave Chat
           </button>
         </div>
-      </div>
-
-      <div class="panel">
-        <h3>Quick Actions</h3>
-        <div class="button-group">
-          <button
-            class="btn-info"
-            @click="getStatus"
-            :disabled="!isConnected"
-            style="width: 100%"
-          >
-            Get Status
-          </button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3>Echo</h3>
-        <div class="control-group">
-          <label for="echoInput">Echo Message</label>
-          <input
-            type="text"
-            v-model="echoInput"
-            placeholder="Type something to echo..."
-          />
-        </div>
-        <button
-          class="btn-primary"
-          @click="sendEcho"
-          :disabled="!isConnected"
-          style="width: 100%"
-        >
-          Send Echo
-        </button>
       </div>
 
       <div class="panel">
@@ -201,19 +128,6 @@ onUnmounted(() => {
         >
           Send Message
         </button>
-      </div>
-
-      <div class="panel log-container">
-        <h3>Event Log</h3>
-        <div class="logs" ref="logsContainer">
-          <Log
-            v-for="log in logs"
-            :key="log.id"
-            :message="log.message"
-            :type="log.type"
-            :timestamp="log.timestamp"
-          />
-        </div>
       </div>
     </div>
   </div>
