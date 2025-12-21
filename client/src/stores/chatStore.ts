@@ -23,7 +23,7 @@ export const useChatStore = defineStore('chat', () => {
   async function fetchChats(): Promise<void> {
     isLoading.value = true;
     try {
-      chats.value = await chatService.getChats();
+      chats.value = await chatService.queryUserConversations();
     } catch (error) {
       console.error('Failed to fetch chats:', error);
       throw error;

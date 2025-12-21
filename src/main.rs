@@ -14,7 +14,7 @@ use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use volt::{
-    AppState, ConversationDb, MessageDb, UserDb,
+    AppState, ConversationDb, MessageDb, UserConverstationsDb, UserDb,
     handlers::{
         conversation::{
             create_conversation, delete_conversation, get_conversation, query_users_conversations,
@@ -39,12 +39,14 @@ async fn main() {
     let (tx, _rx) = broadcast::channel(100);
     let users = UserDb::default();
     let conversations = ConversationDb::default();
+    let user_conversations = UserConverstationsDb::default();
     let messages = MessageDb::default();
     let active_users = Mutex::new(HashSet::new());
     let app_state = Arc::new(AppState {
         tx,
         users,
         conversations,
+        user_conversations,
         messages,
         active_users,
     });

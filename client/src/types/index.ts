@@ -1,3 +1,9 @@
 export type { User } from './user';
 export type { Message } from './message';
-export type { Conversation, CreateConversationRequest } from './conversation';
+export type {
+  CreateConversationResponse,
+  CreateConversationRequest,
+  QueryConversationResponse,
+  ConversationItems,
+  LastMessage,
+} from './conversation';

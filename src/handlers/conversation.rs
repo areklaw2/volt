@@ -13,7 +13,7 @@ use ulid::Ulid;
 use crate::{
     AppState,
     error::AppError,
-    models::{Conversation, ConverstaionKind, Message, MessageKind},
+    models::{Conversation, ConverstaionKind, Message, MessageKind, UserConversation},
 };
 
 #[derive(Debug, Deserialize)]
@@ -28,14 +28,14 @@ pub struct CreateConversationRequest {
 
 #[derive(Debug, Serialize, Clone)]
 pub struct CreateConversationResponse {
-    pub id: Ulid,
+    id: Ulid,
     #[serde(rename = "type")]
-    pub kind: ConverstaionKind,
-    pub title: Option<String>,
-    pub participants: Vec<Ulid>,
-    pub first_message: Message,
-    pub created_at: String,
-    pub updated_at: String,
+    kind: ConverstaionKind,
+    title: Option<String>,
+    participants: Vec<Ulid>,
+    first_message: Message,
+    created_at: String,
+    updated_at: String,
 }
 
 pub async fn create_conversation(
@@ -44,6 +44,22 @@ pub async fn create_conversation(
 ) -> Result<impl IntoResponse, AppError> {
     let conversation_id = Ulid::new();
     let message_id = Ulid::new();
+
+    let mut user_conversations = state.user_conversations.write()?;
+    for participant in input.participants.iter() {
+        let unread_count = match *participant == input.sender_id {
+            true => 0,
+            false => 1,
+        };
+
+        let user_conversation = UserConversation {
+            userid: input.sender_id,
+            conversation_id,
+            last_read_message_id: message_id,
+            unread_count: unread_count,
+        };
+        user_conversations.insert(user_conversation);
+    }
 
     let conversation = Conversation {
         id: conversation_id,
@@ -55,6 +71,11 @@ pub async fn create_conversation(
         updated_at: Utc::now().to_string(),
     };
 
+    state
+        .conversations
+        .write()?
+        .insert(conversation_id, conversation.clone());
+
     let message = Message {
         id: message_id,
         conversation_id: conversation_id,
@@ -64,11 +85,6 @@ pub async fn create_conversation(
         created_at: Utc::now().to_string(),
         updated_at: None,
     };
-
-    state
-        .conversations
-        .write()?
-        .insert(conversation_id, conversation.clone());
 
     state.messages.write()?.insert(message_id, message.clone());
 
@@ -85,36 +101,27 @@ pub async fn create_conversation(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-pub async fn get_conversation(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
-) -> Result<impl IntoResponse, AppError> {
-    let conversation = state
-        .conversations
-        .read()?
-        .get(&id)
-        .cloned()
-        .ok_or(AppError::NotFound)?;
-
-    Ok(Json(conversation))
+#[derive(Debug, Deserialize, Serialize)]
+pub struct QueryConversationResponse {
+    items: ConversationItems,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct QueryConversation {
-    pub conversation_id: Ulid,
-    pub title: Option<String>,
-    pub participants: Vec<Ulid>,
-    pub last_message: LastMessage,
-    pub unread_count: u32,
-    pub updated_at: String,
+pub struct ConversationItems {
+    conversation_id: Ulid,
+    title: Option<String>,
+    participants: Vec<Ulid>,
+    last_message: LastMessage,
+    unread_count: u32,
+    updated_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LastMessage {
-    pub message_id: Ulid,
-    pub sender_id: Ulid,
-    pub content: String,
-    pub created_at: String,
+    message_id: Ulid,
+    sender_id: Ulid,
+    content: String,
+    created_at: String,
 }
 
 pub async fn query_users_conversations(
@@ -134,8 +141,22 @@ pub async fn query_users_conversations(
     Ok(Json(conversations))
 }
 
+pub async fn get_conversation(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Ulid>,
+) -> Result<impl IntoResponse, AppError> {
+    let conversation = state
+        .conversations
+        .read()?
+        .get(&id)
+        .cloned()
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(conversation))
+}
+
 #[derive(Debug, Deserialize)]
-pub struct UpdateChat {
+pub struct UpdateConversation {
     title: Option<String>,
     participants: Option<Vec<Ulid>>,
     last_message_id: Option<Ulid>,
@@ -144,7 +165,7 @@ pub struct UpdateChat {
 pub async fn update_conversation(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Ulid>,
-    Json(input): Json<UpdateChat>,
+    Json(input): Json<UpdateConversation>,
 ) -> Result<impl IntoResponse, AppError> {
     let mut conversation = state
         .conversations

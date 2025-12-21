@@ -30,11 +30,11 @@ pub struct Conversation {
     pub updated_at: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 pub struct UserConversation {
     pub userid: Ulid,
     pub conversation_id: Ulid,
-    pub last_read_message_id: Option<Ulid>,
+    pub last_read_message_id: Ulid,
     pub unread_count: u32,
 }
 
