@@ -1,5 +1,6 @@
 pub mod error;
 pub mod handlers;
+pub mod models;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -8,12 +9,18 @@ use std::{
 use tokio::sync::broadcast;
 use ulid::Ulid;
 
-use crate::handlers::chat::Chat;
+use crate::models::{Conversation, Message, User, UserConversation};
 
-pub type ChatDb = RwLock<HashMap<Ulid, Chat>>;
+pub type ConversationDb = RwLock<HashMap<Ulid, Conversation>>;
+pub type UserDb = RwLock<HashMap<Ulid, User>>;
+pub type MessageDb = RwLock<HashMap<Ulid, Message>>;
+pub type UserConverstationsDb = RwLock<HashMap<Ulid, Vec<UserConversation>>>; //Index on user id
 
 pub struct AppState {
-    pub user_set: Mutex<HashSet<String>>,
-    pub chats: ChatDb,
+    pub active_users: Mutex<HashSet<String>>,
+    pub users: UserDb,
+    pub conversations: ConversationDb,
+    pub messages: MessageDb,
+    //pub user_conversations: UserConverstationsDb,
     pub tx: broadcast::Sender<String>,
 }

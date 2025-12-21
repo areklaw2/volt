@@ -14,10 +14,14 @@ use tower::{BoxError, ServiceBuilder};
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use volt::{
-    AppState, ChatDb,
+    AppState, ConversationDb, MessageDb, UserDb,
     handlers::{
-        chat::{create_chat_handler, get_chat_handler},
-        websocket::websocket_handler,
+        conversation::{
+            create_conversation, delete_conversation, get_conversation, query_users_conversations,
+            update_conversation,
+        },
+        messages::{create_message, delete_message, get_message, query_messages, update_message},
+        websocket::websocket,
     },
 };
 
@@ -32,18 +36,39 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let user_set = Mutex::new(HashSet::new());
     let (tx, _rx) = broadcast::channel(100);
-    let chats = ChatDb::default();
+    let users = UserDb::default();
+    let conversations = ConversationDb::default();
+    let messages = MessageDb::default();
+    let active_users = Mutex::new(HashSet::new());
     let app_state = Arc::new(AppState {
-        user_set,
         tx,
-        chats,
+        users,
+        conversations,
+        messages,
+        active_users,
     });
 
     let http_routes = Router::new()
-        .route("/api/v1/chat/{id}", get(get_chat_handler))
-        .route("/api/v1/chat", post(create_chat_handler))
+        .route("/api/v1/message", post(create_conversation))
+        .route(
+            "/api/v1/conversation/{id}",
+            get(get_conversation)
+                .patch(update_conversation)
+                .delete(delete_conversation),
+        )
+        .route(
+            "/api/v1/conversations/{user_id}",
+            get(query_users_conversations),
+        )
+        .route("/api/v1/message", post(create_message))
+        .route(
+            "/api/v1/message/{id}",
+            get(get_message)
+                .patch(update_message)
+                .delete(delete_message),
+        )
+        .route("/api/v1/messages/{conversation_id}", get(query_messages))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|error: BoxError| async move {
@@ -61,7 +86,7 @@ async fn main() {
                 .into_inner(),
         );
 
-    let ws_routes = Router::new().route("/ws", get(websocket_handler));
+    let ws_routes = Router::new().route("/ws", get(websocket));
 
     let app = Router::new()
         .merge(http_routes)

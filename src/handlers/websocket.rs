@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 
-pub async fn websocket_handler(
+pub async fn websocket(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
@@ -22,21 +22,25 @@ async fn handle_socket(stream: WebSocket, state: Arc<AppState>) {
 
     let mut username = String::new();
     while let Some(Ok(message)) = receiver.next().await {
-        if let Message::Text(name) = message {
-            check_username(&state, &mut username, name.as_str());
+        let Message::Text(user_id) = message else {
+            continue;
+        };
 
-            if !username.is_empty() {
-                break;
-            } else {
-                let _ = sender
-                    .send(Message::Text(Utf8Bytes::from_static(
-                        "Username already taken.",
-                    )))
-                    .await;
-
-                return;
+        check_username(&state, &mut username, user_id.as_str());
+        if username.is_empty() {
+            if let Err(e) = sender
+                .send(Message::Text(Utf8Bytes::from_static(
+                    "Username already taken.",
+                )))
+                .await
+            {
+                tracing::warn!("Failed to send error message: {:?}", e);
             }
+
+            return;
         }
+
+        break;
     }
 
     let mut rx = state.tx.subscribe();
@@ -71,15 +75,14 @@ async fn handle_socket(stream: WebSocket, state: Arc<AppState>) {
     tracing::debug!("{msg}");
     let _ = state.tx.send(msg);
 
-    state.user_set.lock().unwrap().remove(&username);
+    state.active_users.lock().unwrap().remove(&username);
 }
 
-fn check_username(state: &AppState, string: &mut String, name: &str) {
-    let mut user_set = state.user_set.lock().unwrap();
+fn check_username(state: &AppState, string: &mut String, username: &str) {
+    let mut active_users = state.active_users.lock().unwrap();
 
-    if !user_set.contains(name) {
-        user_set.insert(name.to_owned());
-
-        string.push_str(name);
+    if !active_users.contains(username) {
+        active_users.insert(username.to_owned());
+        string.push_str(username);
     }
 }
