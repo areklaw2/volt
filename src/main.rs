@@ -1,24 +1,22 @@
 use axum::{
     Router,
-    extract::{
-        State,
-        ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
-    },
-    response::IntoResponse,
-    routing::get,
+    error_handling::HandleErrorLayer,
+    http::StatusCode,
+    routing::{get, post},
 };
-use futures_util::{sink::SinkExt, stream::StreamExt};
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tokio::sync::broadcast;
+use tower::{BoxError, ServiceBuilder};
+use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-struct AppState {
-    user_set: Mutex<HashSet<String>>,
-    tx: broadcast::Sender<String>,
-}
+use volt::{
+    AppState, ChatDb,
+    handlers::{chat::create_chat_handler, websocket::websocket_handler},
+};
 
 #[tokio::main]
 async fn main() {
@@ -33,10 +31,37 @@ async fn main() {
 
     let user_set = Mutex::new(HashSet::new());
     let (tx, _rx) = broadcast::channel(100);
-    let app_state = Arc::new(AppState { user_set, tx });
+    let chats = ChatDb::default();
+    let app_state = Arc::new(AppState {
+        user_set,
+        tx,
+        chats,
+    });
+
+    let http_routes = Router::new()
+        .route("/api/v1/chat", post(create_chat_handler))
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(|error: BoxError| async move {
+                    if error.is::<tower::timeout::error::Elapsed>() {
+                        Ok(StatusCode::REQUEST_TIMEOUT)
+                    } else {
+                        Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            format!("Unhandled internal error: {error}"),
+                        ))
+                    }
+                }))
+                .timeout(Duration::from_secs(10))
+                .layer(TraceLayer::new_for_http())
+                .into_inner(),
+        );
+
+    let ws_routes = Router::new().route("/ws", get(websocket_handler));
 
     let app = Router::new()
-        .route("/ws", get(ws_handler))
+        .merge(http_routes)
+        .merge(ws_routes)
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -44,75 +69,4 @@ async fn main() {
         .unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
-}
-
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
-}
-
-async fn handle_socket(stream: WebSocket, state: Arc<AppState>) {
-    let (mut sender, mut receiver) = stream.split();
-
-    let mut username = String::new();
-    while let Some(Ok(message)) = receiver.next().await {
-        if let Message::Text(name) = message {
-            check_username(&state, &mut username, name.as_str());
-
-            if !username.is_empty() {
-                break;
-            } else {
-                let _ = sender
-                    .send(Message::Text(Utf8Bytes::from_static(
-                        "Username already taken.",
-                    )))
-                    .await;
-
-                return;
-            }
-        }
-    }
-
-    let mut rx = state.tx.subscribe();
-
-    let msg = format!("{username} joined.");
-    tracing::debug!("{msg}");
-    let _ = state.tx.send(msg);
-
-    let mut send_task = tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            if sender.send(Message::text(msg)).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let tx = state.tx.clone();
-    let name = username.clone();
-
-    let mut recv_task = tokio::spawn(async move {
-        while let Some(Ok(Message::Text(text))) = receiver.next().await {
-            let _ = tx.send(format!("{name}: {text}"));
-        }
-    });
-
-    tokio::select! {
-        _ = &mut send_task => recv_task.abort(),
-        _ = &mut recv_task => send_task.abort(),
-    };
-
-    let msg = format!("{username} left.");
-    tracing::debug!("{msg}");
-    let _ = state.tx.send(msg);
-
-    state.user_set.lock().unwrap().remove(&username);
-}
-
-fn check_username(state: &AppState, string: &mut String, name: &str) {
-    let mut user_set = state.user_set.lock().unwrap();
-
-    if !user_set.contains(name) {
-        user_set.insert(name.to_owned());
-
-        string.push_str(name);
-    }
 }
