@@ -15,7 +15,10 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use volt::{
     AppState, ChatDb,
-    handlers::{chat::create_chat_handler, websocket::websocket_handler},
+    handlers::{
+        chat::{create_chat_handler, get_chat_handler},
+        websocket::websocket_handler,
+    },
 };
 
 #[tokio::main]
@@ -39,6 +42,7 @@ async fn main() {
     });
 
     let http_routes = Router::new()
+        .route("/api/v1/chat/{id}", get(get_chat_handler))
         .route("/api/v1/chat", post(create_chat_handler))
         .layer(
             ServiceBuilder::new()

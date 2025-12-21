@@ -10,7 +10,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use crate::AppState;
+use crate::{AppState, error::AppError};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum ChatKind {
@@ -40,7 +40,7 @@ pub struct Chat {
 pub async fn create_chat_handler(
     State(state): State<Arc<AppState>>,
     Json(input): Json<CreateChat>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, AppError> {
     let chat = Chat {
         id: Ulid::new(),
         kind: input.kind,
@@ -50,22 +50,21 @@ pub async fn create_chat_handler(
         last_massage_id: None,
     };
 
-    state.chats.write().unwrap().insert(chat.id, chat.clone());
+    state.chats.write()?.insert(chat.id, chat.clone());
 
-    (StatusCode::CREATED, Json(chat))
+    Ok((StatusCode::CREATED, Json(chat)))
 }
 
 pub async fn get_chat_handler(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Ulid>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Result<impl IntoResponse, AppError> {
     let chat = state
         .chats
-        .read()
-        .unwrap()
+        .read()?
         .get(&id)
         .cloned()
-        .ok_or(StatusCode::NOT_FOUND)?;
+        .ok_or(AppError::NotFound)?;
 
     Ok(Json(chat))
 }
