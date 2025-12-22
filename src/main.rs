@@ -4,6 +4,7 @@ use axum::{
     http::StatusCode,
     routing::{get, post},
 };
+use sqlx::postgres::PgPoolOptions;
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
@@ -15,6 +16,7 @@ use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use volt::{
     AppState, ConversationDb, MessageDb, UserConverstationsDb, UserDb,
+    config::Config,
     handlers::{
         conversation::{
             create_conversation, delete_conversation, get_conversation, query_users_conversations,
@@ -35,6 +37,20 @@ async fn main() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
+
+    let config = Config::from_env().expect("Failed to load configuration");
+    let pool = PgPoolOptions::new()
+        .max_connections(100)
+        .acquire_timeout(Duration::from_secs(3))
+        .connect(&config.database_url)
+        .await
+        .expect("can't connect to database");
+
+    let x: String = sqlx::query_scalar("select 'hello world from pg'")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    println!("{}", x);
 
     let (tx, _rx) = broadcast::channel(100);
     let users = UserDb::default();

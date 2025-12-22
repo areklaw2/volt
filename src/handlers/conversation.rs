@@ -29,7 +29,6 @@ pub struct CreateConversationRequest {
 #[derive(Debug, Serialize, Clone)]
 pub struct CreateConversationResponse {
     id: Ulid,
-    #[serde(rename = "type")]
     kind: ConverstaionKind,
     title: Option<String>,
     participants: Vec<Ulid>,

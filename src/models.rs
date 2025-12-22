@@ -21,7 +21,6 @@ pub enum ConverstaionKind {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Conversation {
     pub id: Ulid,
-    #[serde(rename = "type")]
     pub kind: ConverstaionKind,
     pub title: Option<String>,
     pub participants: Vec<Ulid>,
@@ -52,7 +51,6 @@ pub struct Message {
     pub conversation_id: Ulid,
     pub sender_id: Ulid,
     pub content: String,
-    #[serde(rename = "type")]
     pub kind: MessageKind,
     pub created_at: String,
     pub updated_at: Option<String>,
