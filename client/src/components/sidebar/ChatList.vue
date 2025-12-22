@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { useChatStore } from '@/stores/chatStore';
+import { useConversationStore } from '@/stores/conversationStore';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import ChatListItem from './ChatListItem.vue';
 import EmptyState from '../common/EmptyState.vue';
 
-const chatStore = useChatStore();
+const chatStore = useConversationStore();
 </script>
 
 <template>

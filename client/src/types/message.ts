@@ -4,6 +4,6 @@ export interface Message {
   sender_id: string;
   content: string;
   type: 'text' | 'image';
-  createdAt: string;
-  updatedAt: string;
+  created_at: string;
+  updated_at?: string;
 }

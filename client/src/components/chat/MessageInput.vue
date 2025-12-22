@@ -45,7 +45,9 @@ function handleKeydown(event: KeyboardEvent) {
       />
       <Button
         @click="handleSend"
-        :disabled="!webSocketStore.isConnected || isSending || !messageInput.trim()"
+        :disabled="
+          !webSocketStore.isConnected || isSending || !messageInput.trim()
+        "
       >
         {{ isSending ? 'Sending...' : 'Send' }}
       </Button>

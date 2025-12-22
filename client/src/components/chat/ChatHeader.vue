@@ -4,18 +4,18 @@ import { useAuthStore } from '@/stores/authStore';
 import { useWebSocketStore } from '@/stores/webSocketStore';
 import Avatar from '../common/Avatar.vue';
 import { Separator } from '@/components/ui/separator';
-import type { Chat } from '@/types';
+import type { Conversation } from '@/types';
 
 const props = defineProps<{
-  chat: Chat;
+  conversation: Conversation;
 }>();
 
 const authStore = useAuthStore();
 const webSocketStore = useWebSocketStore();
 
 const otherParticipant = computed(() => {
-  return props.chat.participants.find(
-    (p) => p.id !== authStore.currentUser?.id
+  return props.conversation.participants.find(
+    (p) => p !== authStore.currentUser?.id
   );
 });
 

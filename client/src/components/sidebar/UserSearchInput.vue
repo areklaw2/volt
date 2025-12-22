@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useUserSearchStore } from '@/stores/userSearchStore';
-import { useChatStore } from '@/stores/chatStore';
+import { useConversationStore } from '@/stores/conversationStore';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Avatar from '../common/Avatar.vue';
 import type { User } from '@/types';
 
 const userSearchStore = useUserSearchStore();
-const chatStore = useChatStore();
+const chatStore = useConversationStore();
 
 const searchInput = ref('');
 
@@ -40,7 +40,9 @@ async function handleUserSelect(user: User) {
 
     <!-- Search Results Dropdown -->
     <div
-      v-if="userSearchStore.searchQuery && userSearchStore.searchResults.length > 0"
+      v-if="
+        userSearchStore.searchQuery && userSearchStore.searchResults.length > 0
+      "
       class="mt-2 border rounded-md bg-background"
     >
       <ScrollArea class="max-h-64">

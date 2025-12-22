@@ -6,7 +6,9 @@ import type { Message } from '@/types';
 export const useWebSocketStore = defineStore('webSocket', () => {
   const socket = ref<WebSocket | null>(null);
   const isConnected = ref(false);
-  const connectionStatus = ref<'connecting' | 'connected' | 'disconnected' | 'error'>('disconnected');
+  const connectionStatus = ref<
+    'connecting' | 'connected' | 'disconnected' | 'error'
+  >('disconnected');
 
   let messageHandler: ((message: Message) => void) | null = null;
 

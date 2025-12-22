@@ -2,14 +2,14 @@
 import { onMounted } from 'vue';
 import { useAuthStore } from '@/stores/authStore';
 import { useWebSocketStore } from '@/stores/webSocketStore';
-import { useChatStore } from '@/stores/chatStore';
+import { useConversationStore } from '@/stores/conversationStore';
 import { useMessageStore } from '@/stores/messageStore';
 import ChatSidebar from './ChatSidebar.vue';
 import ChatWindow from './ChatWindow.vue';
 
 const authStore = useAuthStore();
 const webSocketStore = useWebSocketStore();
-const chatStore = useChatStore();
+const conversationStore = useConversationStore();
 const messageStore = useMessageStore();
 
 onMounted(async () => {
@@ -20,7 +20,7 @@ onMounted(async () => {
     messageStore.initializeWebSocketHandler();
 
     try {
-      await chatStore.fetchChats();
+      await conversationStore.fetchConversations(authStore.currentUser?.id);
     } catch (error) {
       console.error('Failed to fetch chats:', error);
     }

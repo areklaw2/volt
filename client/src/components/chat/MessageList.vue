@@ -11,7 +11,9 @@ const scrollAreaRef = ref<HTMLElement | null>(null);
 async function scrollToBottom() {
   await nextTick();
   if (scrollAreaRef.value) {
-    const scrollContainer = scrollAreaRef.value.querySelector('[data-radix-scroll-area-viewport]');
+    const scrollContainer = scrollAreaRef.value.querySelector(
+      '[data-radix-scroll-area-viewport]'
+    );
     if (scrollContainer) {
       scrollContainer.scrollTop = scrollContainer.scrollHeight;
     }

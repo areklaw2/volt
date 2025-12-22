@@ -36,6 +36,7 @@ pub struct CreateConversationResponse {
     first_message: Message,
     created_at: String,
     updated_at: String,
+    unread_message_count: u32,
 }
 
 pub async fn create_conversation(
@@ -94,6 +95,7 @@ pub async fn create_conversation(
         title: conversation.title.clone(),
         participants: conversation.participants.clone(),
         first_message: message.clone(),
+        unread_message_count: 0,
         created_at: conversation.created_at.clone(),
         updated_at: conversation.updated_at.clone(),
     };

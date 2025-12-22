@@ -2,26 +2,29 @@ import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { chatService } from '@/services/chatService';
 import { useWebSocketStore } from './webSocketStore';
-import { useChatStore } from './chatStore';
+import { useConversationStore } from './conversationStore';
 import { useAuthStore } from './authStore';
 import type { Message } from '@/types';
 
 export const useMessageStore = defineStore('message', () => {
-  const messagesByChatId = ref<Record<string, Message[]>>({});
+  const messagesByConversationId = ref<Record<string, Message[]>>({});
   const isLoading = ref(false);
 
-  const chatStore = useChatStore();
+  const conversationStore = useConversationStore();
 
   const currentMessages = computed(() => {
-    if (!chatStore.currentChatId) return [];
-    return messagesByChatId.value[chatStore.currentChatId] || [];
+    if (!conversationStore.currentConversationId) return [];
+    return (
+      messagesByConversationId.value[conversationStore.currentConversationId] ||
+      []
+    );
   });
 
-  async function fetchMessages(chatId: string): Promise<void> {
+  async function fetchMessages(conversationId: string): Promise<void> {
     isLoading.value = true;
     try {
-      const messages = await chatService.getMessages(chatId);
-      messagesByChatId.value[chatId] = messages;
+      const messages = await chatService.getMessages(conversationId);
+      messagesByConversationId.value[conversationId] = messages;
     } catch (error) {
       console.error('Failed to fetch messages:', error);
       throw error;
@@ -31,22 +34,22 @@ export const useMessageStore = defineStore('message', () => {
   }
 
   function addMessage(message: Message): void {
-    const { chat_id } = message;
+    const { conversation_id } = message;
 
-    if (!messagesByChatId.value[chat_id]) {
-      messagesByChatId.value[chat_id] = [];
+    if (!messagesByConversationId.value[conversation_id]) {
+      messagesByConversationId.value[conversation_id] = [];
     }
 
-    messagesByChatId.value[chat_id].push(message);
-    chatStore.updateChatLastMessage(chat_id, message);
+    messagesByConversationId.value[conversation_id].push(message);
+    conversationStore.updateConversationLastMessage(conversation_id, message);
   }
 
-  async function sendMessage(body: string): Promise<void> {
+  async function sendMessage(content: string): Promise<void> {
     const authStore = useAuthStore();
     const webSocketStore = useWebSocketStore();
 
-    if (!chatStore.currentChatId) {
-      console.error('No chat selected');
+    if (!conversationStore.currentConversationId) {
+      console.error('No conversation selected');
       return;
     }
 
@@ -55,28 +58,27 @@ export const useMessageStore = defineStore('message', () => {
       return;
     }
 
+    //TODO: check if i should be doing this here?
     const message: Message = {
       id: crypto.randomUUID(),
-      chat_id: chatStore.currentChatId,
+      conversation_id: conversationStore.currentConversationId,
       sender_id: authStore.currentUser.id,
-      body,
-      timestamp: new Date().toISOString(),
-      status: 'sending',
+      content,
+      type: 'text',
+      created_at: new Date().toISOString(),
     };
 
     addMessage(message);
 
     try {
       webSocketStore.sendMessage(message);
-      message.status = 'sent';
     } catch (error) {
       console.error('Failed to send message:', error);
-      message.status = 'sent';
     }
   }
 
   function clearMessages(chatId: string): void {
-    delete messagesByChatId.value[chatId];
+    delete messagesByConversationId.value[chatId];
   }
 
   function initializeWebSocketHandler(): void {
@@ -87,7 +89,7 @@ export const useMessageStore = defineStore('message', () => {
   }
 
   return {
-    messagesByChatId,
+    messagesByChatId: messagesByConversationId,
     currentMessages,
     isLoading,
     fetchMessages,

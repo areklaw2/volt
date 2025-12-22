@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { watch } from 'vue';
-import { useChatStore } from '@/stores/chatStore';
+import { useConversationStore } from '@/stores/conversationStore';
 import { useMessageStore } from '@/stores/messageStore';
 import ChatHeader from './chat/ChatHeader.vue';
 import MessageList from './chat/MessageList.vue';
 import MessageInput from './chat/MessageInput.vue';
 import EmptyState from './common/EmptyState.vue';
 
-const chatStore = useChatStore();
+const conversationStore = useConversationStore();
 const messageStore = useMessageStore();
 
 watch(
-  () => chatStore.currentChatId,
-  async (newChatId) => {
-    if (newChatId) {
+  () => conversationStore.currentConversationId,
+  async (newConversationId) => {
+    if (newConversationId) {
       try {
-        await messageStore.fetchMessages(newChatId);
+        await messageStore.fetchMessages(newConversationId);
       } catch (error) {
         console.error('Failed to fetch messages:', error);
       }
@@ -27,8 +27,8 @@ watch(
 
 <template>
   <div class="flex flex-col h-full">
-    <template v-if="chatStore.currentChat">
-      <ChatHeader :chat="chatStore.currentChat" />
+    <template v-if="conversationStore.currentConversation">
+      <ChatHeader :conversation="conversationStore.currentConversation" />
       <MessageList class="flex-1" />
       <MessageInput />
     </template>

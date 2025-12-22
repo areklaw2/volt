@@ -1,7 +1,7 @@
 import { apiClient } from './api';
 import type {
+  Conversation,
   CreateConversationRequest,
-  CreateConversationResponse,
   Message,
   QueryConversationResponse,
 } from '@/types';
@@ -9,11 +9,8 @@ import type {
 export const chatService = {
   async createConversation(
     request: CreateConversationRequest
-  ): Promise<CreateConversationResponse> {
-    return apiClient.post<CreateConversationResponse>(
-      '/v1/conversation',
-      request
-    );
+  ): Promise<Conversation> {
+    return apiClient.post<Conversation>('/v1/conversation', request);
   },
 
   async queryUserConversations(
