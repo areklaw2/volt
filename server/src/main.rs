@@ -17,7 +17,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use volt::{
     AppState, ConversationDb, MessageDb, UserConverstationsDb, UserDb,
     config::Config,
-    handlers::{
+    routes::{
         conversation::{
             create_conversation, delete_conversation, get_conversation, query_users_conversations,
             update_conversation,
