@@ -8,26 +8,27 @@ use axum::{
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use ulid::Ulid;
+use uuid::Uuid;
 
 use crate::{
     AppState,
     errors::{AppError, OptionExt},
-    models::{Conversation, ConverstaionType, Message, Participant},
+    models::{Conversation, ConverstaionType, Message},
+    repositories::participant::Participant,
 };
 
 #[derive(Debug, Deserialize)]
 pub struct CreateConversationRequest {
     conversation_type: ConverstaionType,
     first_message: String,
-    sender_id: Ulid,
-    participants: Vec<Ulid>,
+    sender_id: Uuid,
+    participants: Vec<Uuid>,
     title: Option<String>,
 }
 
 #[derive(Debug, Serialize, Clone)]
 pub struct CreateConversationResponse {
-    id: Ulid,
+    id: Uuid,
     kind: ConverstaionType,
     title: Option<String>,
     first_message: Message,
@@ -39,8 +40,8 @@ pub async fn create_conversation(
     State(state): State<Arc<AppState>>,
     Json(input): Json<CreateConversationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let conversation_id = Ulid::new();
-    let message_id = Ulid::new();
+    let conversation_id = Uuid::now_v7();
+    let message_id = Uuid::now_v7();
     let now = Utc::now();
 
     let mut user_conversations = state.user_conversations.write()?;
@@ -48,12 +49,8 @@ pub async fn create_conversation(
         let user_conversation = Participant {
             user_id: *participant,
             conversation_id,
-            joined_at: now,
-            last_read_at: if *participant == input.sender_id {
-                Some(now)
-            } else {
-                None
-            },
+            joined_at: Some(now),
+            last_read_at: if *participant == input.sender_id { Some(now) } else { None },
         };
         user_conversations.insert(user_conversation);
     }
@@ -66,10 +63,7 @@ pub async fn create_conversation(
         updated_at: None,
     };
 
-    state
-        .conversations
-        .write()?
-        .insert(conversation_id, conversation.clone());
+    state.conversations.write()?.insert(conversation_id, conversation.clone());
 
     let message = Message {
         id: message_id,
@@ -101,9 +95,9 @@ pub struct QueryConversationResponse {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ConversationItems {
-    conversation_id: Ulid,
+    conversation_id: Uuid,
     title: Option<String>,
-    participants: Vec<Ulid>,
+    participants: Vec<Uuid>,
     last_message: LastMessage,
     unread_count: u32,
     updated_at: String,
@@ -111,20 +105,20 @@ pub struct ConversationItems {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LastMessage {
-    message_id: Ulid,
-    sender_id: Ulid,
+    message_id: Uuid,
+    sender_id: Uuid,
     content: String,
     created_at: String,
 }
 
 pub async fn query_users_conversations(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<Ulid>,
+    Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     //TODO: paginate this
 
     // Get conversation IDs where user is a participant
-    let user_conversation_ids: Vec<Ulid> = state
+    let user_conversation_ids: Vec<Uuid> = state
         .user_conversations
         .read()?
         .iter()
@@ -143,10 +137,7 @@ pub async fn query_users_conversations(
     Ok(Json(conversations))
 }
 
-pub async fn get_conversation(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
     let conversation = state
         .conversations
         .read()?
@@ -164,7 +155,7 @@ pub struct UpdateConversation {
 
 pub async fn update_conversation(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
+    Path(id): Path<Uuid>,
     Json(input): Json<UpdateConversation>,
 ) -> Result<impl IntoResponse, AppError> {
     let mut conversation = state
@@ -189,18 +180,12 @@ pub async fn update_conversation(
         conversation.updated_at = Some(Utc::now());
     }
 
-    state
-        .conversations
-        .write()?
-        .insert(conversation.id, conversation.clone());
+    state.conversations.write()?.insert(conversation.id, conversation.clone());
 
     Ok(Json(conversation))
 }
 
-pub async fn delete_conversation(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn delete_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
     if state.conversations.write()?.remove(&id).is_some() {
         Ok(StatusCode::NO_CONTENT)
     } else {

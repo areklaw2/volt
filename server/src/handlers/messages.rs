@@ -8,7 +8,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde::Deserialize;
-use ulid::Ulid;
+use uuid::Uuid;
 
 use crate::{
     AppState,
@@ -18,8 +18,8 @@ use crate::{
 
 #[derive(Debug, Deserialize)]
 pub struct CreateMessage {
-    conversation_id: Ulid,
-    sender_id: Ulid,
+    conversation_id: Uuid,
+    sender_id: Uuid,
     content: String,
 }
 
@@ -28,7 +28,7 @@ pub async fn create_message(
     Json(input): Json<CreateMessage>,
 ) -> Result<impl IntoResponse, AppError> {
     let message = Message {
-        id: Ulid::new(),
+        id: Uuid::now_v7(),
         conversation_id: input.conversation_id,
         sender_id: input.sender_id,
         content: input.content,
@@ -43,7 +43,7 @@ pub async fn create_message(
 
 pub async fn get_message(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     let message = state
         .messages
@@ -57,7 +57,7 @@ pub async fn get_message(
 
 pub async fn query_messages(
     State(state): State<Arc<AppState>>,
-    Path(conversation_id): Path<Ulid>,
+    Path(conversation_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     //TODO: paginate this
 
@@ -79,7 +79,7 @@ pub struct UpdateMessage {
 
 pub async fn update_message(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
+    Path(id): Path<Uuid>,
     Json(input): Json<UpdateMessage>,
 ) -> Result<impl IntoResponse, AppError> {
     let mut message = state
@@ -108,7 +108,7 @@ pub async fn update_message(
 
 pub async fn delete_message(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Ulid>,
+    Path(id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
     if state.messages.write()?.remove(&id).is_some() {
         Ok(StatusCode::NO_CONTENT)
