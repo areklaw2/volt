@@ -12,14 +12,17 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    errors::{AppError, OptionExt},
-    models::{Conversation, ConverstaionType, Message},
-    repositories::participant::Participant,
+    dto::{CreateConversationRequest, CreateMessageRequest, CreateParticipantsRequest, UpdateConversationRequest},
+    errors::AppError,
+    repositories::{
+        conversation::{Conversation, ConversationType},
+        message::Message,
+    },
 };
 
 #[derive(Debug, Deserialize)]
-pub struct CreateConversationRequest {
-    conversation_type: ConverstaionType,
+pub struct CreateConversationHandlerRequest {
+    conversation_type: ConversationType,
     first_message: String,
     sender_id: Uuid,
     participants: Vec<Uuid>,
@@ -29,7 +32,7 @@ pub struct CreateConversationRequest {
 #[derive(Debug, Serialize, Clone)]
 pub struct CreateConversationResponse {
     id: Uuid,
-    kind: ConverstaionType,
+    kind: ConversationType,
     title: Option<String>,
     first_message: Message,
     created_at: chrono::DateTime<Utc>,
@@ -38,47 +41,34 @@ pub struct CreateConversationResponse {
 
 pub async fn create_conversation(
     State(state): State<Arc<AppState>>,
-    Json(input): Json<CreateConversationRequest>,
+    Json(input): Json<CreateConversationHandlerRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let conversation_id = Uuid::now_v7();
-    let message_id = Uuid::now_v7();
-    let now = Utc::now();
-
-    let mut user_conversations = state.user_conversations.write()?;
-    for participant in input.participants.iter() {
-        let user_conversation = Participant {
-            user_id: *participant,
-            conversation_id,
-            joined_at: Some(now),
-            last_read_at: if *participant == input.sender_id { Some(now) } else { None },
-        };
-        user_conversations.insert(user_conversation);
-    }
-
-    let conversation = Conversation {
-        id: conversation_id,
-        converstion_type: input.conversation_type,
-        name: input.title,
-        created_at: now,
-        updated_at: None,
+    // Create the conversation
+    let conversation_request = CreateConversationRequest {
+        conversation_type: input.conversation_type.clone(),
+        name: input.title.clone(),
     };
+    let conversation = state.conversations.create_conversation(conversation_request).await?;
 
-    state.conversations.write()?.insert(conversation_id, conversation.clone());
+    // Create participants
+    let participants_request = CreateParticipantsRequest {
+        sender_id: input.sender_id,
+        conversation_id: conversation.id,
+        users: input.participants,
+    };
+    state.participants.create_conversation_participants(participants_request).await?;
 
-    let message = Message {
-        id: message_id,
-        conversation_id,
+    // Create the first message
+    let message_request = CreateMessageRequest {
+        conversation_id: conversation.id,
         sender_id: input.sender_id,
         content: input.first_message,
-        created_at: now,
-        updated_at: None,
     };
-
-    state.messages.write()?.insert(message_id, message.clone());
+    let message = state.messages.create_message(message_request).await?;
 
     let response = CreateConversationResponse {
         id: conversation.id,
-        kind: conversation.converstion_type.clone(),
+        kind: conversation.conversation_type.clone(),
         title: conversation.name.clone(),
         first_message: message,
         created_at: conversation.created_at,
@@ -117,78 +107,61 @@ pub async fn query_users_conversations(
 ) -> Result<impl IntoResponse, AppError> {
     //TODO: paginate this
 
-    // Get conversation IDs where user is a participant
-    let user_conversation_ids: Vec<Uuid> = state
-        .user_conversations
-        .read()?
-        .iter()
-        .filter(|p| p.user_id == user_id)
-        .map(|p| p.conversation_id)
-        .collect();
+    // Get participant entries for this user
+    let user_participants = state.participants.read_participant_conversations(user_id).await?;
 
-    let conversations = state
-        .conversations
-        .read()?
-        .values()
-        .filter(|conversation| user_conversation_ids.contains(&conversation.id))
-        .cloned()
-        .collect::<Vec<_>>();
+    // Get the conversation IDs
+    let conversation_ids: Vec<Uuid> = user_participants.iter().map(|p| p.conversation_id).collect();
+
+    // Fetch all conversations
+    let mut conversations: Vec<Conversation> = Vec::new();
+    for conv_id in conversation_ids {
+        if let Some(conv) = state.conversations.read_conversation(conv_id).await? {
+            conversations.push(conv);
+        }
+    }
 
     Ok(Json(conversations))
 }
 
 pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
-    let conversation = state
-        .conversations
-        .read()?
-        .get(&id)
-        .cloned()
-        .ok_or_not_found("Conversation not found")?;
-
-    Ok(Json(conversation))
+    match state.conversations.read_conversation(id).await? {
+        Some(conversation) => Ok(Json(conversation)),
+        None => Err(AppError::not_found("Conversation not found")),
+    }
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UpdateConversation {
+pub struct UpdateConversationHandlerRequest {
     title: Option<String>,
 }
 
 pub async fn update_conversation(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(input): Json<UpdateConversation>,
+    Json(input): Json<UpdateConversationHandlerRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let mut conversation = state
+    // Get the current conversation to check if it's a group
+    let conversation = state
         .conversations
-        .read()?
-        .get(&id)
-        .cloned()
-        .ok_or_not_found("Conversation not found")?;
+        .read_conversation(id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Conversation not found"))?;
 
-    // TODO: add a validation to this
-
-    let mut updated = false;
-
-    if conversation.converstion_type == ConverstaionType::Group {
-        if let Some(title) = input.title {
-            conversation.name = Some(title);
-            updated = true;
-        }
+    // Only allow updating name for group conversations
+    if conversation.conversation_type != ConversationType::Group {
+        return Ok(Json(conversation));
     }
 
-    if updated {
-        conversation.updated_at = Some(Utc::now());
+    let update_request = UpdateConversationRequest { name: input.title };
+
+    match state.conversations.update_conversation(id, update_request).await? {
+        Some(updated) => Ok(Json(updated)),
+        None => Err(AppError::not_found("Conversation not found")),
     }
-
-    state.conversations.write()?.insert(conversation.id, conversation.clone());
-
-    Ok(Json(conversation))
 }
 
 pub async fn delete_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
-    if state.conversations.write()?.remove(&id).is_some() {
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Ok(StatusCode::NOT_FOUND)
-    }
+    state.conversations.delete_conversation(id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
