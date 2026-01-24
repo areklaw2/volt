@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
@@ -7,42 +8,31 @@ pub struct User {
     pub username: String,
     pub display_name: String,
     pub avatar_url: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub enum ConverstaionKind {
-    #[serde(rename = "direct")]
-    Direct,
-    #[serde(rename = "group")]
-    Group,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Conversation {
     pub id: Ulid,
-    pub kind: ConverstaionKind,
-    pub title: Option<String>,
-    pub participants: Vec<Ulid>,
-    pub created_at: String,
-    pub last_message_id: Ulid,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
-pub struct UserConversation {
-    pub userid: Ulid,
-    pub conversation_id: Ulid,
-    pub last_read_message_id: Ulid,
-    pub unread_count: u32,
+    pub converstion_type: ConverstaionType,
+    pub name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub enum MessageKind {
-    #[serde(rename = "text")]
-    Text,
-    #[serde(rename = "image")]
-    Image,
+#[serde(rename_all = "snake_case")]
+pub enum ConverstaionType {
+    Direct,
+    Group,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+pub struct Participant {
+    pub conversation_id: Ulid,
+    pub user_id: Ulid,
+    pub joined_at: DateTime<Utc>,
+    pub last_read_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -51,14 +41,6 @@ pub struct Message {
     pub conversation_id: Ulid,
     pub sender_id: Ulid,
     pub content: String,
-    pub kind: MessageKind,
-    pub created_at: String,
-    pub updated_at: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct ReadReciepts {
-    pub message_id: Ulid,
-    pub user_id: Ulid,
-    pub read_at: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }

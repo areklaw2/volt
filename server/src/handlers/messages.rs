@@ -12,8 +12,8 @@ use ulid::Ulid;
 
 use crate::{
     AppState,
-    error::AppError,
-    models::{Message, MessageKind},
+    errors::{AppError, OptionExt},
+    models::Message,
 };
 
 #[derive(Debug, Deserialize)]
@@ -21,7 +21,6 @@ pub struct CreateMessage {
     conversation_id: Ulid,
     sender_id: Ulid,
     content: String,
-    kind: MessageKind,
 }
 
 pub async fn create_message(
@@ -33,8 +32,7 @@ pub async fn create_message(
         conversation_id: input.conversation_id,
         sender_id: input.sender_id,
         content: input.content,
-        kind: input.kind,
-        created_at: Utc::now().to_string(),
+        created_at: Utc::now(),
         updated_at: None,
     };
 
@@ -52,7 +50,7 @@ pub async fn get_message(
         .read()?
         .get(&id)
         .cloned()
-        .ok_or(AppError::NotFound)?;
+        .ok_or_not_found("Message not found")?;
 
     Ok(Json(message))
 }
@@ -89,7 +87,7 @@ pub async fn update_message(
         .read()?
         .get(&id)
         .cloned()
-        .ok_or(AppError::NotFound)?;
+        .ok_or_not_found("Message not found")?;
 
     // TODO: add a validation to this
 
@@ -100,7 +98,7 @@ pub async fn update_message(
     }
 
     if updated {
-        message.updated_at = Some(Utc::now().to_string());
+        message.updated_at = Some(Utc::now());
     }
 
     state.messages.write()?.insert(message.id, message.clone());

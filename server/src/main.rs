@@ -1,9 +1,4 @@
-use axum::{
-    Router,
-    error_handling::HandleErrorLayer,
-    http::StatusCode,
-    routing::{get, post},
-};
+use axum::Router;
 use sqlx::postgres::PgPoolOptions;
 use std::{
     collections::HashSet,
@@ -11,20 +6,11 @@ use std::{
     time::Duration,
 };
 use tokio::sync::broadcast;
-use tower::{BoxError, ServiceBuilder};
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use volt::{
     AppState, ConversationDb, MessageDb, UserConverstationsDb, UserDb,
-    config::Config,
-    routes::{
-        conversation::{
-            create_conversation, delete_conversation, get_conversation, query_users_conversations,
-            update_conversation,
-        },
-        messages::{create_message, delete_message, get_message, query_messages, update_message},
-        websocket::websocket,
-    },
+    config::AppConfig,
+    handlers::{http_routes, ws_routes},
 };
 
 #[tokio::main]
@@ -38,19 +24,13 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = Config::from_env().expect("Failed to load configuration");
+    let config = AppConfig::from_env().expect("Failed to load configuration");
     let pool = PgPoolOptions::new()
         .max_connections(100)
         .acquire_timeout(Duration::from_secs(3))
         .connect(&config.database_url)
         .await
         .expect("can't connect to database");
-
-    let x: String = sqlx::query_scalar("select 'hello world from pg'")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-    println!("{}", x);
 
     let (tx, _rx) = broadcast::channel(100);
     let users = UserDb::default();
@@ -67,48 +47,9 @@ async fn main() {
         active_users,
     });
 
-    let http_routes = Router::new()
-        .route("/api/v1/conversation", post(create_conversation))
-        .route(
-            "/api/v1/conversation/{id}",
-            get(get_conversation)
-                .patch(update_conversation)
-                .delete(delete_conversation),
-        )
-        .route(
-            "/api/v1/conversations/{user_id}",
-            get(query_users_conversations),
-        )
-        .route("/api/v1/message", post(create_message))
-        .route(
-            "/api/v1/message/{id}",
-            get(get_message)
-                .patch(update_message)
-                .delete(delete_message),
-        )
-        .route("/api/v1/messages/{conversation_id}", get(query_messages))
-        .layer(
-            ServiceBuilder::new()
-                .layer(HandleErrorLayer::new(|error: BoxError| async move {
-                    if error.is::<tower::timeout::error::Elapsed>() {
-                        Ok(StatusCode::REQUEST_TIMEOUT)
-                    } else {
-                        Err((
-                            StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("Unhandled internal error: {error}"),
-                        ))
-                    }
-                }))
-                .timeout(Duration::from_secs(10))
-                .layer(TraceLayer::new_for_http())
-                .into_inner(),
-        );
-
-    let ws_routes = Router::new().route("/ws", get(websocket));
-
     let app = Router::new()
-        .merge(http_routes)
-        .merge(ws_routes)
+        .merge(http_routes())
+        .merge(ws_routes())
         .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

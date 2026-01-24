@@ -4,20 +4,20 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = { version = "0.8.8", features = ["ws", "http2"] }
-axum-extra = { version = "0.12.3", features = ["typed-header"] }
+axum = { version = "0.8.8", features = ["ws", "http2", "multipart"] }
+tokio = { version = "1.49", features = ["full"] }
+tower = { version = "0.5.3", features = ["util", "timeout"] }
+tower-http = { version = "0.6.1", features = ["fs", "trace", "add-extension", "cors"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 headers = "0.4"
-axum-server = { version = "0.8", features = ["tls-rustls"] }
-tokio = { version = "1", features = ["full"] }
-tower = { version = "0.5.2", features = ["util", "timeout"] }
-tower-http = { version = "0.6.1", features = ["fs", "trace", "add-extension"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.147"
+serde_json = "1.0.149"
 ulid = { version = "1.2.1", features = ["serde"] }
-chrono = "0.4.42"
-sqlx = {version = "0.8.6", features = ["chrono", "postgres", "runtime-tokio-rustls", "json", "macros", "migrate"]}
-config = "0.15.19"
-thiserror = "2.0.17"
+chrono = { version = "0.4.43", features = ["serde"] }
+sqlx = {version = "0.8.6", features = ["chrono", "postgres", "runtime-tokio-rustls", "json", "macros", "migrate", "derive"]}
+thiserror = "2.0.18"
+anyhow = "1.0.100"
+validator = { version = "0.20.0", features = ["derive"] }
+dotenvy = "0.15.7"

@@ -1,7 +1,7 @@
 pub mod config;
-pub mod error;
+pub mod errors;
+pub mod handlers;
 pub mod models;
-pub mod routes;
 
 use std::{
     collections::{HashMap, HashSet},
@@ -10,12 +10,12 @@ use std::{
 use tokio::sync::broadcast;
 use ulid::Ulid;
 
-use crate::models::{Conversation, Message, User, UserConversation};
+use crate::models::{Conversation, Message, Participant, User};
 
 pub type ConversationDb = RwLock<HashMap<Ulid, Conversation>>;
 pub type UserDb = RwLock<HashMap<Ulid, User>>;
 pub type MessageDb = RwLock<HashMap<Ulid, Message>>;
-pub type UserConverstationsDb = RwLock<HashSet<UserConversation>>;
+pub type UserConverstationsDb = RwLock<HashSet<Participant>>;
 
 pub struct AppState {
     pub active_users: Mutex<HashSet<String>>,
