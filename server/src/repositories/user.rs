@@ -27,7 +27,7 @@ pub trait UserRepository: Send + Sync {
     async fn delete_user(&self, user_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct InMemoryUserRepository {
     users: tokio::sync::RwLock<HashMap<Uuid, User>>,
 }

@@ -16,13 +16,6 @@ use crate::{
     models::Message,
 };
 
-#[derive(Debug, Deserialize)]
-pub struct CreateMessage {
-    conversation_id: Uuid,
-    sender_id: Uuid,
-    content: String,
-}
-
 pub async fn create_message(
     State(state): State<Arc<AppState>>,
     Json(input): Json<CreateMessage>,
@@ -41,16 +34,8 @@ pub async fn create_message(
     Ok((StatusCode::CREATED, Json(message)))
 }
 
-pub async fn get_message(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, AppError> {
-    let message = state
-        .messages
-        .read()?
-        .get(&id)
-        .cloned()
-        .ok_or_not_found("Message not found")?;
+pub async fn get_message(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
+    let message = state.messages.read()?.get(&id).cloned().ok_or_not_found("Message not found")?;
 
     Ok(Json(message))
 }
@@ -82,12 +67,7 @@ pub async fn update_message(
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateMessage>,
 ) -> Result<impl IntoResponse, AppError> {
-    let mut message = state
-        .messages
-        .read()?
-        .get(&id)
-        .cloned()
-        .ok_or_not_found("Message not found")?;
+    let mut message = state.messages.read()?.get(&id).cloned().ok_or_not_found("Message not found")?;
 
     // TODO: add a validation to this
 
@@ -106,10 +86,7 @@ pub async fn update_message(
     Ok(Json(message))
 }
 
-pub async fn delete_message(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn delete_message(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
     if state.messages.write()?.remove(&id).is_some() {
         Ok(StatusCode::NO_CONTENT)
     } else {

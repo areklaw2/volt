@@ -1,68 +1,46 @@
 use axum::{
     extract::{
-        State,
-        ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade},
+        Path, State,
+        ws::{self, Utf8Bytes, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
 };
 use futures_util::{sink::SinkExt, stream::StreamExt};
+use serde::Deserialize;
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
-use crate::AppState;
+use crate::{AppState, models::Message};
 
-pub async fn websocket(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+pub async fn websocket(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
 
-async fn handle_socket(stream: WebSocket, state: Arc<AppState>) {
-    let (mut sender, mut receiver) = stream.split();
+async fn handle_socket(stream: WebSocket, state: Arc<AppState>, user_id: Uuid) {
+    let (mut ws_sender, mut ws_receiver) = stream.split();
 
-    let mut username = String::new();
-    while let Some(Ok(message)) = receiver.next().await {
-        let Message::Text(user_id) = message else {
-            continue;
-        };
+    let (tx, mut rx) = mpsc::channel::<Message>(100);
 
-        check_username(&state, &mut username, user_id.as_str());
-        if username.is_empty() {
-            if let Err(e) = sender
-                .send(Message::Text(Utf8Bytes::from_static(
-                    "Username already taken.",
-                )))
-                .await
-            {
-                tracing::warn!("Failed to send error message: {:?}", e);
-            }
-
-            return;
-        }
-
-        break;
-    }
-
-    let mut rx = state.tx.subscribe();
-
-    let msg = format!("{username} joined.");
-    tracing::debug!("{msg}");
-    let _ = state.tx.send(msg);
+    let mut connections = state.active_connections.write().await;
+    connections.entry(user_id).or_insert_with(Vec::new).push(tx);
 
     let mut send_task = tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            if sender.send(Message::text(msg)).await.is_err() {
+        while let Some(message) = rx.recv().await {
+            let json = serde_json::to_string(&message)?;
+            if ws_sender.send(ws::Message::Text(json.into())).await.is_err() {
                 break;
             }
         }
     });
 
-    let tx = state.tx.clone();
-    let name = username.clone();
+    let msg = format!("{user_id} joined.");
+    tracing::debug!("{msg}");
 
     let mut recv_task = tokio::spawn(async move {
-        while let Some(Ok(Message::Text(text))) = receiver.next().await {
-            let _ = tx.send(format!("{name}: {text}"));
+        while let Some(Ok(ws::Message::Text(text))) = ws_receiver.next().await {
+            let incoming: CreateMessage = serde_json::from_str(&text)?;
+            let message = state.messages.
         }
     });
 
@@ -75,14 +53,20 @@ async fn handle_socket(stream: WebSocket, state: Arc<AppState>) {
     tracing::debug!("{msg}");
     let _ = state.tx.send(msg);
 
-    state.active_users.lock().unwrap().remove(&username);
+    state.active_connections.lock().unwrap().remove(&username);
 }
 
 fn check_username(state: &AppState, string: &mut String, username: &str) {
-    let mut active_users = state.active_users.lock().unwrap();
+    let mut active_users = state.active_connections.lock().unwrap();
 
     if !active_users.contains(username) {
         active_users.insert(username.to_owned());
         string.push_str(username);
     }
+}
+
+#[derive(Deserialize)]
+struct CreateMessage {
+    conversation_id: Uuid,
+    content: String,
 }

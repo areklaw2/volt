@@ -33,7 +33,7 @@ pub trait ParticipantRepository: Send + Sync {
     async fn delete_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct InMemoryParticipantRepository {
     participants: RwLock<HashMap<(Uuid, Uuid), Participant>>,
     user_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,

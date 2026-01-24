@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
+use crate::repositories::conversation::ConversationType;
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreateUserRequest {
     pub username: String,
@@ -26,4 +28,33 @@ pub struct CreateParticipantsRequest {
 pub struct UpdateParticipantRequest {
     pub joined_at: Option<DateTime<Utc>>,
     pub last_read_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CreateMessageRequest {
+    pub conversation_id: Uuid,
+    pub sender_id: Uuid,
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct UpdateMessageRequest {
+    pub content: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct Pagination {
+    pub offset: Option<usize>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CreateConversationRequest {
+    pub conversation_type: ConversationType,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct UpdateConversationRequest {
+    pub name: Option<String>,
 }
