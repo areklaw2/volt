@@ -29,7 +29,7 @@ pub trait ParticipantRepository: Send + Sync {
         user_id: Uuid,
         conversation_id: Uuid,
         request: UpdateParticipantRequest,
-    ) -> Result<Participant, anyhow::Error>;
+    ) -> Result<Option<Participant>, anyhow::Error>;
     async fn delete_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
@@ -121,10 +121,12 @@ impl ParticipantRepository for InMemoryParticipantRepository {
         user_id: Uuid,
         conversation_id: Uuid,
         request: UpdateParticipantRequest,
-    ) -> Result<Participant, anyhow::Error> {
+    ) -> Result<Option<Participant>, anyhow::Error> {
         let key = (user_id, conversation_id);
         let mut participants = self.participants.write().await;
-        let participant = participants.get_mut(&key).ok_or_else(|| anyhow::anyhow!("Participant not found"))?;
+        let Some(participant) = participants.get_mut(&key) else {
+            return Ok(None);
+        };
 
         if let Some(joined_at) = request.joined_at
             && participant.joined_at.is_none()
@@ -136,7 +138,7 @@ impl ParticipantRepository for InMemoryParticipantRepository {
             participant.last_read_at = Some(last_read_at);
         }
 
-        Ok(participant.clone())
+        Ok(Some(participant.clone()))
     }
 
     async fn delete_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error> {
@@ -193,7 +195,7 @@ impl ParticipantRepository for DbParticipantRepository {
         user_id: Uuid,
         conversation_id: Uuid,
         request: UpdateParticipantRequest,
-    ) -> Result<Participant, anyhow::Error> {
+    ) -> Result<Option<Participant>, anyhow::Error> {
         todo!()
     }
 
