@@ -575,3 +575,4 @@ $RECYCLE.BIN/
 scripts
 scripts/*
 justfile
+GUIDE.md

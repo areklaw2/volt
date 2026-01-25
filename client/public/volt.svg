@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="800mm"
+   height="800mm"
+   viewBox="0 0 800 800"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="volt.svg"
+   inkscape:export-filename="volt.svg"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   inkscape:version="1.4.2 (ebf0e940, 2025-05-08)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#cccccc"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="1"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="0.27516667"
+     inkscape:cx="3198.0617"
+     inkscape:cy="1826.1659"
+     inkscape:window-width="3424"
+     inkscape:window-height="1358"
+     inkscape:window-x="12"
+     inkscape:window-y="30"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg1" />
+  <defs
+     id="defs1">
+    <linearGradient
+       id="linearGradient31">
+      <stop
+         style="stop-color:#f5e70d;stop-opacity:1;"
+         offset="0"
+         id="stop31" />
+      <stop
+         style="stop-color:#f0e855;stop-opacity:1;"
+         offset="0.5"
+         id="stop33" />
+      <stop
+         style="stop-color:#17a3f3;stop-opacity:1;"
+         offset="1"
+         id="stop32" />
+    </linearGradient>
+    <linearGradient
+       xlink:href="#linearGradient31"
+       id="linearGradient32"
+       x1="390.38974"
+       y1="29.895376"
+       x2="448.16226"
+       y2="500.41483"
+       gradientUnits="userSpaceOnUse"
+       gradientTransform="translate(-0.6371728,41.520015)" />
+  </defs>
+  <g
+     id="g1"
+     inkscape:export-filename="volt.svg"
+     inkscape:export-xdpi="96"
+     inkscape:export-ydpi="96">
+    <path
+       id="rect3"
+       style="fill:none;fill-opacity:0.929329;stroke:#000000;stroke-width:9;stroke-dasharray:none;stroke-opacity:0.934247;paint-order:stroke fill markers"
+       d="m 192.60491,134.46438 a 43.270457,43.270457 0 0 0 -43.27023,43.27074 v 388.03161 a 46.25944,46.25944 0 0 0 44.62001,46.23025 l -3.6406,46.57442 -5.71903,79.7419 65.69005,-79.64061 38.47568,-46.64677 h 312.12152 a 48.508939,48.508939 0 0 0 48.50867,-48.50918 v -385.038 a 44.014376,44.014376 0 0 0 -44.01437,-44.01436 z" />
+    <path
+       id="text18-9-5"
+       style="font-style:italic;font-weight:bold;font-size:523.207px;line-height:0;font-family:Arial;-inkscape-font-specification:'Arial, Bold Italic';letter-spacing:0px;word-spacing:-311.934px;fill:url(#linearGradient32);fill-opacity:1;stroke:#000000;stroke-width:15;stroke-miterlimit:25.5;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers"
+       d="m 632.60704,71.661741 -99.37429,80.969739 -99.37378,80.97025 45.65251,-1.34359 3.12746,-0.092 -48.37121,58.36284 h 47.15733 L 334.42886,484.43034 278.50618,243.69413 h -90.49939 l 79.07424,318.23174 h 96.8127 L 606.82774,243.69413 h -45.15849 l 34.99115,-42.21911 h -51.63406 l 33.85944,-50.1866 z" />
+  </g>
+</svg>
