@@ -108,38 +108,43 @@ pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path
     Ok((StatusCode::OK, Json(response)))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct UpdateConversationHandlerRequest {
-    title: Option<String>,
-}
-
 pub async fn update_conversation(
     State(state): State<Arc<AppState>>,
     Path(id): Path<Uuid>,
-    Json(input): Json<UpdateConversationHandlerRequest>,
+    Json(input): Json<UpdateConversationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Get the current conversation to check if it's a group
     let conversation = state
         .conversations
         .read_conversation(id)
         .await?
         .ok_or_else(|| AppError::not_found("Conversation not found"))?;
 
-    // Only allow updating name for group conversations
     if conversation.conversation_type != ConversationType::Group {
         return Ok(Json(conversation));
     }
 
-    let update_request = UpdateConversationRequest { name: input.title };
-
+    let update_request = UpdateConversationRequest { name: input.name };
     match state.conversations.update_conversation(id, update_request).await? {
         Some(updated) => Ok(Json(updated)),
         None => Err(AppError::not_found("Conversation not found")),
     }
 }
 
-pub async fn delete_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
-    state.conversations.delete_conversation(id).await?;
+pub async fn join_conversation(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Path(user_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    state.participants.create_participant(user_id, id).await?;
+    Ok(StatusCode::CREATED)
+}
+
+pub async fn leave_conversation(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Path(user_id): Path<Uuid>,
+) -> Result<impl IntoResponse, AppError> {
+    state.participants.delete_participant(user_id, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

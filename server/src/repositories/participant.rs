@@ -20,6 +20,7 @@ pub struct Participant {
 
 #[async_trait]
 pub trait ParticipantRepository: Send + Sync {
+    async fn create_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<Participant, anyhow::Error>;
     async fn create_conversation_participants(&self, request: CreateParticipantsRequest) -> Result<Vec<Participant>, anyhow::Error>;
     async fn read_conversation_participants(&self, conversation_id: Uuid) -> Result<Vec<Participant>, anyhow::Error>;
     async fn read_participant_conversations(&self, user_id: Uuid) -> Result<Vec<Participant>, anyhow::Error>;
@@ -52,6 +53,28 @@ impl InMemoryParticipantRepository {
 
 #[async_trait]
 impl ParticipantRepository for InMemoryParticipantRepository {
+    async fn create_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<Participant, anyhow::Error> {
+        let mut participants = self.participants.write().await;
+        let mut conversation_index = self.conversation_index.write().await;
+        let mut user_index = self.user_index.write().await;
+
+        let now = Some(Utc::now());
+        let participant = Participant {
+            user_id,
+            conversation_id: conversation_id,
+            joined_at: now,
+            last_read_at: now,
+        };
+
+        let key = (user_id, conversation_id);
+        participants.insert(key, participant.clone());
+
+        user_index.entry(user_id).or_default().push(conversation_id);
+        conversation_index.entry(conversation_id).or_default().push(user_id);
+
+        Ok(participant)
+    }
+
     async fn create_conversation_participants(&self, request: CreateParticipantsRequest) -> Result<Vec<Participant>, anyhow::Error> {
         let mut participants = self.participants.write().await;
         let mut conversation_index = self.conversation_index.write().await;
@@ -177,6 +200,10 @@ impl DbParticipantRepository {
 #[async_trait]
 #[allow(unused)]
 impl ParticipantRepository for DbParticipantRepository {
+    async fn create_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<Participant, anyhow::Error> {
+        todo!()
+    }
+
     async fn create_conversation_participants(&self, request: CreateParticipantsRequest) -> Result<Vec<Participant>, anyhow::Error> {
         todo!()
     }
@@ -210,6 +237,17 @@ impl ParticipantRepository for DbParticipantRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn create_participant_creates_participant() {
+        let repo = InMemoryParticipantRepository::new();
+        let conversation_id = Uuid::now_v7();
+        let user1 = Uuid::now_v7();
+
+        let participant = repo.create_participant(user1, conversation_id).await.unwrap();
+        assert!(participant.joined_at.is_some());
+        assert!(participant.last_read_at.is_some());
+    }
 
     fn create_request(sender_id: Uuid, conversation_id: Uuid, users: Vec<Uuid>) -> CreateParticipantsRequest {
         CreateParticipantsRequest {
