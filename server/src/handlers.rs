@@ -12,7 +12,7 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use crate::{
     AppState,
     handlers::{
-        conversation::{create_conversation, delete_conversation, get_conversation, query_users_conversations},
+        conversation::{create_conversation, delete_conversation, get_conversation, query_users_conversations, update_conversation},
         messages::{create_message, delete_message, get_message, query_messages, update_message},
         websocket::websocket,
     },
@@ -22,14 +22,18 @@ pub mod conversation;
 pub mod messages;
 pub mod websocket;
 
-pub fn configure_http_routes() -> Router<Arc<AppState>> {
+fn conversation_routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/v1/conversation", post(create_conversation))
         .route(
             "/api/v1/conversation/{id}",
-            get(get_conversation).patch(get_conversation).delete(delete_conversation),
+            get(get_conversation).patch(update_conversation).delete(delete_conversation),
         )
         .route("/api/v1/conversations/{user_id}", get(query_users_conversations))
+}
+
+pub fn configure_http_routes() -> Router<Arc<AppState>> {
+    Router::new()
         .route("/api/v1/message", post(create_message))
         .route(
             "/api/v1/message/{id}",

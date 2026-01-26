@@ -4,6 +4,8 @@ pub mod errors;
 pub mod handlers;
 pub mod repositories;
 
+use clerk_rs::{ClerkConfiguration, clerk::Clerk};
+use secrecy::ExposeSecret;
 use sqlx::postgres::PgPoolOptions;
 use std::{
     collections::{HashMap, HashSet},
@@ -56,7 +58,7 @@ pub async fn configure_state() -> Result<Arc<AppState>, anyhow::Error> {
             let pool = PgPoolOptions::new()
                 .max_connections(100)
                 .acquire_timeout(Duration::from_secs(3))
-                .connect(&config.database_url)
+                .connect(&config.database_url.expose_secret())
                 .await?;
 
             let users = Arc::new(DbUserRepository::new(pool.clone()));

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     Json,
@@ -6,76 +6,141 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
     AppState,
-    dto::{CreateConversationRequest, CreateMessageRequest, CreateParticipantsRequest, UpdateConversationRequest},
-    errors::AppError,
-    repositories::{
-        conversation::{Conversation, ConversationType},
-        message::Message,
+    dto::{
+        ConversationParticipantRequest, ConversationParticipantResponse, CreateConversationRequest, CreateParticipantsRequest,
+        ParticipantResponse, UpdateConversationRequest,
     },
+    errors::AppError,
+    repositories::conversation::{Conversation, ConversationType},
 };
-
-#[derive(Debug, Deserialize)]
-pub struct CreateConversationHandlerRequest {
-    conversation_type: ConversationType,
-    first_message: String,
-    sender_id: Uuid,
-    participants: Vec<Uuid>,
-    title: Option<String>,
-}
-
-#[derive(Debug, Serialize, Clone)]
-pub struct CreateConversationResponse {
-    id: Uuid,
-    kind: ConversationType,
-    title: Option<String>,
-    first_message: Message,
-    created_at: chrono::DateTime<Utc>,
-    updated_at: Option<chrono::DateTime<Utc>>,
-}
 
 pub async fn create_conversation(
     State(state): State<Arc<AppState>>,
-    Json(input): Json<CreateConversationHandlerRequest>,
+    Json(input): Json<ConversationParticipantRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Create the conversation
     let conversation_request = CreateConversationRequest {
         conversation_type: input.conversation_type.clone(),
-        name: input.title.clone(),
+        name: input.name.clone(),
     };
     let conversation = state.conversations.create_conversation(conversation_request).await?;
 
-    // Create participants
     let participants_request = CreateParticipantsRequest {
         sender_id: input.sender_id,
         conversation_id: conversation.id,
-        users: input.participants,
+        users: input.participants.clone(),
     };
-    state.participants.create_conversation_participants(participants_request).await?;
 
-    // Create the first message
-    let message_request = CreateMessageRequest {
-        conversation_id: conversation.id,
-        sender_id: input.sender_id,
-        content: input.first_message,
-    };
-    let message = state.messages.create_message(message_request).await?;
+    let participants = state.participants.create_conversation_participants(participants_request).await?;
+    let users = state.users.read_users(input.participants).await?;
 
-    let response = CreateConversationResponse {
+    if participants.len() != users.len() {
+        return Err(AppError::bad_request("A requested participant may not exist"));
+    }
+
+    let users_map: HashMap<Uuid, _> = users.into_iter().map(|u| (u.id, u)).collect();
+    let participant_responses: Vec<ParticipantResponse> = participants
+        .into_iter()
+        .filter_map(|p| {
+            users_map.get(&p.user_id).map(|user| ParticipantResponse {
+                id: user.id,
+                username: user.username.clone(),
+                display_name: user.display_name.clone(),
+                avatar_url: user.avatar_url.clone(),
+                joined_at: p.joined_at,
+                last_read_at: p.last_read_at,
+            })
+        })
+        .collect();
+
+    let response = ConversationParticipantResponse {
         id: conversation.id,
-        kind: conversation.conversation_type.clone(),
-        title: conversation.name.clone(),
-        first_message: message,
+        conversation_type: conversation.conversation_type,
+        name: conversation.name,
+        participants: participant_responses,
         created_at: conversation.created_at,
         updated_at: conversation.updated_at,
     };
 
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
+    let Some(conversation) = state.conversations.read_conversation(id).await? else {
+        return Err(AppError::not_found("Conversation not found"));
+    };
+
+    let participants = state.participants.read_conversation_participants(conversation.id).await?;
+    let user_ids: Vec<Uuid> = participants.iter().map(|p| p.user_id).collect();
+    let users = state.users.read_users(user_ids).await?;
+    if participants.len() != users.len() {
+        return Err(AppError::bad_request("A requested participant may not exist"));
+    }
+
+    let users_map: HashMap<Uuid, _> = users.into_iter().map(|u| (u.id, u)).collect();
+    let participant_responses: Vec<ParticipantResponse> = participants
+        .into_iter()
+        .filter_map(|p| {
+            users_map.get(&p.user_id).map(|user| ParticipantResponse {
+                id: user.id,
+                username: user.username.clone(),
+                display_name: user.display_name.clone(),
+                avatar_url: user.avatar_url.clone(),
+                joined_at: p.joined_at,
+                last_read_at: p.last_read_at,
+            })
+        })
+        .collect();
+
+    let response = ConversationParticipantResponse {
+        id: conversation.id,
+        conversation_type: conversation.conversation_type,
+        name: conversation.name,
+        participants: participant_responses,
+        created_at: conversation.created_at,
+        updated_at: conversation.updated_at,
+    };
+
+    Ok((StatusCode::OK, Json(response)))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateConversationHandlerRequest {
+    title: Option<String>,
+}
+
+pub async fn update_conversation(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Json(input): Json<UpdateConversationHandlerRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Get the current conversation to check if it's a group
+    let conversation = state
+        .conversations
+        .read_conversation(id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Conversation not found"))?;
+
+    // Only allow updating name for group conversations
+    if conversation.conversation_type != ConversationType::Group {
+        return Ok(Json(conversation));
+    }
+
+    let update_request = UpdateConversationRequest { name: input.title };
+
+    match state.conversations.update_conversation(id, update_request).await? {
+        Some(updated) => Ok(Json(updated)),
+        None => Err(AppError::not_found("Conversation not found")),
+    }
+}
+
+pub async fn delete_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
+    state.conversations.delete_conversation(id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -122,46 +187,4 @@ pub async fn query_users_conversations(
     }
 
     Ok(Json(conversations))
-}
-
-pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
-    match state.conversations.read_conversation(id).await? {
-        Some(conversation) => Ok(Json(conversation)),
-        None => Err(AppError::not_found("Conversation not found")),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct UpdateConversationHandlerRequest {
-    title: Option<String>,
-}
-
-pub async fn update_conversation(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-    Json(input): Json<UpdateConversationHandlerRequest>,
-) -> Result<impl IntoResponse, AppError> {
-    // Get the current conversation to check if it's a group
-    let conversation = state
-        .conversations
-        .read_conversation(id)
-        .await?
-        .ok_or_else(|| AppError::not_found("Conversation not found"))?;
-
-    // Only allow updating name for group conversations
-    if conversation.conversation_type != ConversationType::Group {
-        return Ok(Json(conversation));
-    }
-
-    let update_request = UpdateConversationRequest { name: input.title };
-
-    match state.conversations.update_conversation(id, update_request).await? {
-        Some(updated) => Ok(Json(updated)),
-        None => Err(AppError::not_found("Conversation not found")),
-    }
-}
-
-pub async fn delete_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
-    state.conversations.delete_conversation(id).await?;
-    Ok(StatusCode::NO_CONTENT)
 }

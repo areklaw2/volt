@@ -16,6 +16,10 @@ async fn main() {
         .init();
 
     let state = configure_state().await.unwrap();
+
+    // let clerk_config = ClerkConfiguration::new(None, None, Some(clerk_secret_key), None);
+    // let clerk = Clerk::new(clerk_config);
+
     let app = Router::new()
         .merge(configure_http_routes())
         .merge(configure_ws_routes())

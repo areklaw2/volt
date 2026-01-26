@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::repositories::conversation::ConversationType;
@@ -57,4 +57,32 @@ pub struct CreateConversationRequest {
 #[derive(Debug, Deserialize, Clone)]
 pub struct UpdateConversationRequest {
     pub name: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ConversationParticipantRequest {
+    pub conversation_type: ConversationType,
+    pub sender_id: Uuid,
+    pub participants: Vec<Uuid>,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ParticipantResponse {
+    pub id: Uuid,
+    pub username: String,
+    pub display_name: String,
+    pub avatar_url: String,
+    pub joined_at: Option<DateTime<Utc>>,
+    pub last_read_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct ConversationParticipantResponse {
+    pub id: Uuid,
+    pub conversation_type: ConversationType,
+    pub name: Option<String>,
+    pub created_at: chrono::DateTime<Utc>,
+    pub participants: Vec<ParticipantResponse>,
+    pub updated_at: Option<chrono::DateTime<Utc>>,
 }

@@ -23,6 +23,7 @@ pub struct User {
 pub trait UserRepository: Send + Sync {
     async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error>;
     async fn read_user(&self, user_id: Uuid) -> Result<Option<User>, anyhow::Error>;
+    async fn read_users(&self, user_ids: Vec<Uuid>) -> Result<Vec<User>, anyhow::Error>;
     async fn update_user(&self, user_id: Uuid, request: UpdateUserRequest) -> Result<Option<User>, anyhow::Error>;
     async fn delete_user(&self, user_id: Uuid) -> Result<(), anyhow::Error>;
 }
@@ -56,6 +57,11 @@ impl UserRepository for InMemoryUserRepository {
 
     async fn read_user(&self, user_id: Uuid) -> Result<Option<User>, anyhow::Error> {
         Ok(self.users.read().await.get(&user_id).cloned())
+    }
+
+    async fn read_users(&self, user_ids: Vec<Uuid>) -> Result<Vec<User>, anyhow::Error> {
+        let users = self.users.read().await;
+        Ok(user_ids.iter().filter_map(|id| users.get(id).cloned()).collect())
     }
 
     async fn update_user(&self, user_id: Uuid, request: UpdateUserRequest) -> Result<Option<User>, anyhow::Error> {
@@ -100,6 +106,10 @@ impl UserRepository for DbUserRepository {
     }
 
     async fn read_user(&self, user_id: Uuid) -> Result<Option<User>, anyhow::Error> {
+        todo!()
+    }
+
+    async fn read_users(&self, user_ids: Vec<Uuid>) -> Result<Vec<User>, anyhow::Error> {
         todo!()
     }
 

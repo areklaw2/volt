@@ -22,3 +22,5 @@ thiserror = "2.0.18"
 anyhow = "1.0.100"
 validator = { version = "0.20.0", features = ["derive"] }
 dotenvy = "0.15.7"
+clerk-rs = { version = "0.4.2", features = ["axum"] }
+secrecy = "0.10.3"
