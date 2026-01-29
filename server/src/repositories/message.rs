@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
 use anyhow::Ok;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::dto::{CreateMessageRequest, Pagination, UpdateMessageRequest};
+use crate::{
+    dto::{CreateMessageRequest, Pagination, UpdateMessageRequest},
+    repositories::{DbRepository, InMemoryRepository},
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Message {
@@ -29,21 +28,8 @@ pub trait MessageRepository: Send + Sync {
     async fn delete_message(&self, message_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
-#[derive(Debug, Default)]
-pub struct InMemoryMessageRepository {
-    messages: tokio::sync::RwLock<HashMap<Uuid, Message>>,
-}
-
-impl InMemoryMessageRepository {
-    pub fn new() -> Self {
-        Self {
-            messages: RwLock::default(),
-        }
-    }
-}
-
 #[async_trait]
-impl MessageRepository for InMemoryMessageRepository {
+impl MessageRepository for InMemoryRepository {
     async fn create_message(&self, request: CreateMessageRequest) -> Result<Message, anyhow::Error> {
         let message = Message {
             id: Uuid::now_v7(),
@@ -54,17 +40,17 @@ impl MessageRepository for InMemoryMessageRepository {
             updated_at: None,
         };
 
-        self.messages.write().await.insert(message.id, message.clone());
+        self.messages_repo.write().await.insert(message.id, message.clone());
 
         Ok(message)
     }
 
     async fn read_message(&self, message_id: Uuid) -> Result<Option<Message>, anyhow::Error> {
-        Ok(self.messages.read().await.get(&message_id).cloned())
+        Ok(self.messages_repo.read().await.get(&message_id).cloned())
     }
 
     async fn list_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error> {
-        let messages = self.messages.read().await;
+        let messages = self.messages_repo.read().await;
 
         let messages = messages
             .values()
@@ -78,7 +64,7 @@ impl MessageRepository for InMemoryMessageRepository {
     }
 
     async fn update_message(&self, message_id: Uuid, request: UpdateMessageRequest) -> Result<Option<Message>, anyhow::Error> {
-        let mut messages = self.messages.write().await;
+        let mut messages = self.messages_repo.write().await;
         let Some(message) = messages.get_mut(&message_id) else {
             return Ok(None);
         };
@@ -92,26 +78,14 @@ impl MessageRepository for InMemoryMessageRepository {
     }
 
     async fn delete_message(&self, message_id: Uuid) -> Result<(), anyhow::Error> {
-        self.messages.write().await.remove(&message_id);
+        self.messages_repo.write().await.remove(&message_id);
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-#[allow(unused)]
-pub struct DbMessageRepository {
-    pool: Pool<Postgres>,
-}
-
-impl DbMessageRepository {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self { pool }
     }
 }
 
 #[async_trait]
 #[allow(unused)]
-impl MessageRepository for DbMessageRepository {
+impl MessageRepository for DbRepository {
     async fn create_message(&self, request: CreateMessageRequest) -> Result<Message, anyhow::Error> {
         todo!()
     }
@@ -147,7 +121,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_message_returns_message_with_correct_fields() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         let request = create_request(conv_id, sender_id, "Hello world");
@@ -161,7 +135,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_message_generates_unique_id() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         let request1 = create_request(conv_id, sender_id, "First");
@@ -175,7 +149,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_message_sets_created_at_timestamp() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let before = Utc::now();
         let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Test");
 
@@ -187,7 +161,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_message_returns_existing_message() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Test message");
         let created = repo.create_message(request).await.unwrap();
 
@@ -199,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_message_returns_none_for_nonexistent() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let result = repo.read_message(random_id).await.unwrap();
@@ -209,7 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_messages_returns_messages_for_conversation() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
@@ -222,7 +196,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_messages_filters_by_conversation_id() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv1 = Uuid::now_v7();
         let conv2 = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
@@ -237,7 +211,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_messages_applies_pagination_offset() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
@@ -255,7 +229,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_messages_applies_pagination_limit() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
@@ -273,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn list_messages_returns_empty_for_no_messages() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
 
         let messages = repo.list_messages(conv_id, Pagination::default()).await.unwrap();
@@ -283,7 +257,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_message_updates_content() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Original");
         let created = repo.create_message(request).await.unwrap();
 
@@ -297,7 +271,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_message_sets_updated_at() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Original");
         let created = repo.create_message(request).await.unwrap();
         assert!(created.updated_at.is_none());
@@ -316,7 +290,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_message_returns_none_for_nonexistent() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let update = UpdateMessageRequest {
@@ -329,7 +303,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_message_removes_message() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "To delete");
         let created = repo.create_message(request).await.unwrap();
 
@@ -341,7 +315,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_message_succeeds_for_nonexistent() {
-        let repo = InMemoryMessageRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let result = repo.delete_message(random_id).await;

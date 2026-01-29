@@ -12,8 +12,7 @@ use uuid::Uuid;
 use crate::{
     AppState,
     dto::{
-        ConversationParticipantRequest, ConversationParticipantResponse, CreateConversationRequest, CreateParticipantsRequest,
-        ParticipantResponse, UpdateConversationRequest,
+        ConversationResponse, CreateConversationRequest, CreateParticipantsRequest, ParticipantResponse, UpdateConversationRequest,
     },
     errors::AppError,
     repositories::conversation::{Conversation, ConversationType},
@@ -21,22 +20,12 @@ use crate::{
 
 pub async fn create_conversation(
     State(state): State<Arc<AppState>>,
-    Json(input): Json<ConversationParticipantRequest>,
+    Json(request): Json<CreateConversationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let conversation_request = CreateConversationRequest {
-        conversation_type: input.conversation_type.clone(),
-        name: input.name.clone(),
-    };
-    let conversation = state.conversations.create_conversation(conversation_request).await?;
+    let conversation = state.repository.create_conversation(request).await?;
 
-    let participants_request = CreateParticipantsRequest {
-        sender_id: input.sender_id,
-        conversation_id: conversation.id,
-        users: input.participants.clone(),
-    };
-
-    let participants = state.participants.create_conversation_participants(participants_request).await?;
-    let users = state.users.read_users(input.participants).await?;
+    let participants = state.repository.create_conversation_participants(participants_request).await?;
+    let users = state.repository.read_users(request.participants).await?;
 
     if participants.len() != users.len() {
         return Err(AppError::bad_request("A requested participant may not exist"));
@@ -57,7 +46,7 @@ pub async fn create_conversation(
         })
         .collect();
 
-    let response = ConversationParticipantResponse {
+    let response = ConversationResponse {
         id: conversation.id,
         conversation_type: conversation.conversation_type,
         name: conversation.name,
@@ -96,7 +85,7 @@ pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path
         })
         .collect();
 
-    let response = ConversationParticipantResponse {
+    let response = ConversationResponse {
         id: conversation.id,
         conversation_type: conversation.conversation_type,
         name: conversation.name,
@@ -175,19 +164,13 @@ pub async fn query_users_conversations(
     State(state): State<Arc<AppState>>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    //TODO: paginate this
-
-    // Get participant entries for this user
     let user_participants = state.participants.read_participant_conversations(user_id).await?;
-
-    // Get the conversation IDs
     let conversation_ids: Vec<Uuid> = user_participants.iter().map(|p| p.conversation_id).collect();
 
-    // Fetch all conversations
     let mut conversations: Vec<Conversation> = Vec::new();
-    for conv_id in conversation_ids {
-        if let Some(conv) = state.conversations.read_conversation(conv_id).await? {
-            conversations.push(conv);
+    for conversation_id in conversation_ids {
+        if let Some(conversation) = state.conversations.read_conversation(conversation_id).await? {
+            conversations.push(conversation);
         }
     }
 

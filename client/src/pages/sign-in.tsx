@@ -9,6 +9,7 @@ export default function SignInPage() {
       }}
     >
       <SignIn
+        forceRedirectUrl="/"
         appearance={{
           layout: {
             logoImageUrl: '/volt.svg',

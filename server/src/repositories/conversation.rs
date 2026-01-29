@@ -1,14 +1,15 @@
-use std::collections::HashMap;
-
 use anyhow::Ok;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
-use tokio::sync::RwLock;
+use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::dto::{CreateConversationRequest, UpdateConversationRequest};
+use crate::{
+    dto::{CreateConversationRequest, UpdateConversationRequest},
+    errors::AppError,
+    repositories::{DbRepository, InMemoryRepository, participant::Participant, user::User},
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -26,30 +27,23 @@ pub struct Conversation {
     pub updated_at: Option<DateTime<Utc>>,
 }
 
+pub struct ConversationAggregate {
+    pub conversation: Conversation,
+    pub participants: Vec<Participant>,
+    pub users: Vec<User>,
+}
+
 #[async_trait]
 pub trait ConversationRepository: Send + Sync {
-    async fn create_conversation(&self, request: CreateConversationRequest) -> Result<Conversation, anyhow::Error>;
-    async fn read_conversation(&self, id: Uuid) -> Result<Option<Conversation>, anyhow::Error>;
+    async fn create_conversation(&self, request: CreateConversationRequest) -> Result<ConversationAggregate, anyhow::Error>;
+    async fn read_conversation(&self, id: Uuid) -> Result<Option<ConversationAggregate>, anyhow::Error>;
     async fn update_conversation(&self, id: Uuid, request: UpdateConversationRequest) -> Result<Option<Conversation>, anyhow::Error>;
     async fn delete_conversation(&self, id: Uuid) -> Result<(), anyhow::Error>;
 }
 
-#[derive(Debug, Default)]
-pub struct InMemoryConversationRepository {
-    conversations: RwLock<HashMap<Uuid, Conversation>>,
-}
-
-impl InMemoryConversationRepository {
-    pub fn new() -> Self {
-        Self {
-            conversations: RwLock::default(),
-        }
-    }
-}
-
 #[async_trait]
-impl ConversationRepository for InMemoryConversationRepository {
-    async fn create_conversation(&self, request: CreateConversationRequest) -> Result<Conversation, anyhow::Error> {
+impl ConversationRepository for InMemoryRepository {
+    async fn create_conversation(&self, request: CreateConversationRequest) -> Result<ConversationAggregate, anyhow::Error> {
         let conversation = Conversation {
             id: Uuid::now_v7(),
             conversation_type: request.conversation_type,
@@ -58,17 +52,76 @@ impl ConversationRepository for InMemoryConversationRepository {
             updated_at: None,
         };
 
-        self.conversations.write().await.insert(conversation.id, conversation.clone());
+        self.conversations_repo.write().await.insert(conversation.id, conversation.clone());
 
-        Ok(conversation)
+        let mut participants_repo = self.participants_repo.write().await;
+        let mut conversation_index = self.conversation_index.write().await;
+        let mut user_index = self.user_index.write().await;
+
+        let mut participants = Vec::new();
+        for user_id in request.participants {
+            let mut participant = Participant {
+                user_id: user_id,
+                conversation_id: conversation.id,
+                joined_at: None,
+                last_read_at: None,
+            };
+
+            if request.sender_id == user_id {
+                let now = Some(Utc::now());
+                participant.joined_at = now;
+                participant.last_read_at = now;
+            }
+
+            let key = (user_id, conversation.id);
+            participants_repo.insert(key, participant.clone());
+
+            user_index.entry(user_id).or_default().push(conversation.id);
+            conversation_index.entry(conversation.id).or_default().push(user_id);
+
+            participants.push(participant);
+        }
+
+        let users_repo = self.user_repos.read().await;
+        let users: Vec<User> = participants.iter().filter_map(|id| users_repo.get(&id.user_id).cloned()).collect();
+        let result = ConversationAggregate {
+            conversation,
+            participants,
+            users,
+        };
+
+        Ok(result)
     }
 
-    async fn read_conversation(&self, id: Uuid) -> Result<Option<Conversation>, anyhow::Error> {
-        Ok(self.conversations.read().await.get(&id).cloned())
+    async fn read_conversation(&self, id: Uuid) -> Result<Option<ConversationAggregate>, anyhow::Error> {
+        let Some(conversation) = self.conversations_repo.read().await.get(&id).cloned() else {
+            return Ok(None);
+        };
+
+        let participants_repo = self.participants_repo.read().await;
+        let conversation_index = self.conversation_index.read().await;
+        let participants = match conversation_index.get(&conversation.id) {
+            Some(user_ids) => user_ids
+                .iter()
+                .filter_map(|user_id| participants_repo.get(&(*user_id, conversation.id)).cloned())
+                .collect(),
+            None => Vec::new(),
+        };
+
+        let users_repo = self.user_repos.read().await;
+        let users: Vec<User> = participants.iter().filter_map(|id| users_repo.get(&id.user_id).cloned()).collect();
+
+        let result = ConversationAggregate {
+            conversation,
+            participants,
+            users,
+        };
+
+        Ok(Some(result))
     }
 
     async fn update_conversation(&self, id: Uuid, request: UpdateConversationRequest) -> Result<Option<Conversation>, anyhow::Error> {
-        let mut conversations = self.conversations.write().await;
+        let mut conversations = self.conversations_repo.write().await;
         let Some(conversation) = conversations.get_mut(&id) else {
             return Ok(None);
         };
@@ -82,31 +135,36 @@ impl ConversationRepository for InMemoryConversationRepository {
     }
 
     async fn delete_conversation(&self, id: Uuid) -> Result<(), anyhow::Error> {
-        self.conversations.write().await.remove(&id);
+        let Some(conversation) = self.conversations_repo.read().await.get(&id).cloned() else {
+            return Ok();
+        };
+
+        let key = (user_id, conversation_id);
+        self.participants_repo.write().await.remove(&key);
+
+        let mut user_index = self.user_index.write().await;
+        if let Some(conversation_ids) = user_index.get_mut(&user_id) {
+            conversation_ids.retain(|id| *id != conversation_id);
+        }
+
+        let mut conversation_index = self.conversation_index.write().await;
+        if let Some(user_ids) = conversation_index.get_mut(&conversation_id) {
+            user_ids.retain(|id| *id != user_id);
+        }
+
+        self.conversations_repo.write().await.remove(&id);
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-#[allow(unused)]
-pub struct DbConversationRepository {
-    pool: Pool<Postgres>,
-}
-
-impl DbConversationRepository {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self { pool }
     }
 }
 
 #[async_trait]
 #[allow(unused)]
-impl ConversationRepository for DbConversationRepository {
-    async fn create_conversation(&self, request: CreateConversationRequest) -> Result<Conversation, anyhow::Error> {
+impl ConversationRepository for DbRepository {
+    async fn create_conversation(&self, request: CreateConversationRequest) -> Result<ConversationAggregate, anyhow::Error> {
         todo!()
     }
 
-    async fn read_conversation(&self, id: Uuid) -> Result<Option<Conversation>, anyhow::Error> {
+    async fn read_conversation(&self, id: Uuid) -> Result<Option<ConversationAggregate>, anyhow::Error> {
         todo!()
     }
 
@@ -132,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_returns_conversation_with_correct_fields() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Group, Some("Test Group"));
 
         let conversation = repo.create_conversation(request).await.unwrap();
@@ -143,7 +201,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_generates_unique_id() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request1 = create_request(ConversationType::Direct, None);
         let request2 = create_request(ConversationType::Group, Some("Group"));
 
@@ -155,7 +213,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_sets_created_at_timestamp() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let before = Utc::now();
         let request = create_request(ConversationType::Direct, None);
 
@@ -167,7 +225,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_direct_conversation_has_no_name() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Direct, None);
 
         let conversation = repo.create_conversation(request).await.unwrap();
@@ -178,7 +236,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_group_conversation_has_name() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Group, Some("My Group Chat"));
 
         let conversation = repo.create_conversation(request).await.unwrap();
@@ -189,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_conversation_returns_existing() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Group, Some("Test"));
         let created = repo.create_conversation(request).await.unwrap();
 
@@ -201,7 +259,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_conversation_returns_none_for_nonexistent() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let result = repo.read_conversation(random_id).await.unwrap();
@@ -211,7 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_conversation_updates_name() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Group, Some("Original"));
         let created = repo.create_conversation(request).await.unwrap();
 
@@ -225,7 +283,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_conversation_sets_updated_at() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Group, Some("Test"));
         let created = repo.create_conversation(request).await.unwrap();
         assert!(created.updated_at.is_none());
@@ -244,7 +302,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_conversation_returns_none_for_nonexistent() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let update = UpdateConversationRequest {
@@ -257,7 +315,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_conversation_removes_conversation() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request(ConversationType::Direct, None);
         let created = repo.create_conversation(request).await.unwrap();
 
@@ -269,7 +327,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_conversation_succeeds_for_nonexistent() {
-        let repo = InMemoryConversationRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let result = repo.delete_conversation(random_id).await;

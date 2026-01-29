@@ -9,6 +9,7 @@ export default function SignUpPage() {
       }}
     >
       <SignUp
+        forceRedirectUrl="/"
         appearance={{
           layout: {
             logoImageUrl: '/volt.svg',

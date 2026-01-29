@@ -4,65 +4,80 @@ use axum::{
     Router,
     error_handling::HandleErrorLayer,
     http::{self, HeaderValue, Method, StatusCode},
-    routing::{get, post},
+    routing::{get, patch, post},
 };
+use clerk_rs::{
+    ClerkConfiguration,
+    clerk::Clerk,
+    validators::{axum::ClerkLayer, jwks::MemoryCacheJwksProvider},
+};
+use secrecy::ExposeSecret;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
 use crate::{
     AppState,
+    config::AppConfig,
     handlers::{
+        chat::chat,
         conversation::{
             create_conversation, get_conversation, join_conversation, leave_conversation, query_users_conversations,
             update_conversation,
         },
-        messages::{create_message, delete_message, get_message, query_messages, update_message},
-        websocket::websocket,
+        messages::{delete_message, query_messages, update_message},
     },
 };
 
+pub mod chat;
 pub mod conversation;
 pub mod messages;
-pub mod websocket;
 
 fn conversation_routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/api/v1/conversation", post(create_conversation))
-        .route("/api/v1/conversation/{id}", get(get_conversation).patch(update_conversation))
-        .route("/api/v1/conversation/{id}/join/{user_id}", post(join_conversation))
-        .route("/api/v1/conversation/{id}/leave/{user_id}", post(leave_conversation))
-        .route("/api/v1/conversations/{user_id}", get(query_users_conversations))
+        .route("/conversation", post(create_conversation))
+        .route("/conversation/{id}", get(get_conversation).patch(update_conversation))
+        .route("/conversation/{id}/join/{user_id}", post(join_conversation))
+        .route("/conversation/{id}/leave/{user_id}", post(leave_conversation))
+        .route("/conversations/{user_id}", get(query_users_conversations))
 }
 
-pub fn configure_http_routes() -> Router<Arc<AppState>> {
+fn message_routes() -> Router<Arc<AppState>> {
     Router::new()
-        .route("/api/v1/message", post(create_message))
-        .route(
-            "/api/v1/message/{id}",
-            get(get_message).patch(update_message).delete(delete_message),
-        )
-        .route("/api/v1/messages/{conversation_id}", get(query_messages))
-        .layer(
-            ServiceBuilder::new()
-                .layer(HandleErrorLayer::new(|error: BoxError| async move {
-                    if error.is::<tower::timeout::error::Elapsed>() {
-                        Ok(StatusCode::REQUEST_TIMEOUT)
-                    } else {
-                        Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Unhandled internal error: {error}")))
-                    }
-                }))
-                .timeout(Duration::from_secs(100))
-                .layer(TraceLayer::new_for_http())
-                .into_inner(),
-        )
+        .route("/message/{id}", patch(update_message).delete(delete_message))
+        .route("/messages/{conversation_id}", get(query_messages))
+}
+
+fn chat_routes() -> Router<Arc<AppState>> {
+    Router::new().route("/chat/{user_id}", get(chat))
+}
+
+pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
+    let clerk_config = ClerkConfiguration::new(None, None, Some(config.clerk_secret_key.expose_secret().to_string()), None);
+    let clerk = Clerk::new(clerk_config);
+
+    let http_routes = Router::new().merge(conversation_routes()).merge(message_routes()).layer(
+        ServiceBuilder::new()
+            .layer(HandleErrorLayer::new(|error: BoxError| async move {
+                if error.is::<tower::timeout::error::Elapsed>() {
+                    Ok(StatusCode::REQUEST_TIMEOUT)
+                } else {
+                    Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Unhandled internal error: {error}")))
+                }
+            }))
+            .timeout(Duration::from_secs(100))
+            .into_inner(),
+    );
+
+    let api_routes = Router::new().merge(http_routes).merge(chat_routes());
+
+    Router::new()
+        .nest("/api/v1", api_routes)
         .layer(
             CorsLayer::new()
                 .allow_headers([http::header::CONTENT_TYPE])
                 .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
                 .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::PUT, Method::DELETE]),
         )
-}
-
-pub fn configure_ws_routes() -> Router<Arc<AppState>> {
-    Router::new().route("/ws/{user_id}", get(websocket))
+        .layer(ClerkLayer::new(MemoryCacheJwksProvider::new(clerk), None, true))
+        .layer(TraceLayer::new_for_http())
 }

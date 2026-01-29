@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::{AppState, dto::CreateMessageRequest, repositories::message::Message};
 
-pub async fn websocket(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
+pub async fn chat(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
 
@@ -51,12 +51,12 @@ async fn handle_socket(stream: WebSocket, state: Arc<AppState>, user_id: Uuid) {
 
             let conversation_id = request.conversation_id;
 
-            let Ok(message) = state_clone.messages.create_message(request).await else {
+            let Ok(message) = state_clone.repository.create_message(request).await else {
                 tracing::error!("Failed to create message");
                 continue;
             };
 
-            let Ok(participants) = state_clone.participants.read_conversation_participants(conversation_id).await else {
+            let Ok(participants) = state_clone.repository.read_conversation_participants(conversation_id).await else {
                 tracing::error!("Failed to get participants");
                 continue;
             };

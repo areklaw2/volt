@@ -1,9 +1,6 @@
 use axum::Router;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use volt::{
-    configure_state,
-    handlers::{configure_http_routes, configure_ws_routes},
-};
+use volt::{config::AppConfig, configure_state, handlers::routes};
 
 #[tokio::main]
 async fn main() {
@@ -15,17 +12,12 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let state = configure_state().await.unwrap();
+    let config = AppConfig::from_env().unwrap();
+    let state = configure_state(&config).await.unwrap();
 
-    // let clerk_config = ClerkConfiguration::new(None, None, Some(clerk_secret_key), None);
-    // let clerk = Clerk::new(clerk_config);
+    let app = Router::new().merge(routes(&config)).with_state(state);
 
-    let app = Router::new()
-        .merge(configure_http_routes())
-        .merge(configure_ws_routes())
-        .with_state(state);
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", config.port)).await.unwrap();
     tracing::debug!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }

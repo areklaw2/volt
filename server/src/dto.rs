@@ -49,18 +49,12 @@ pub struct Pagination {
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct CreateConversationRequest {
-    pub conversation_type: ConversationType,
-    pub name: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Clone)]
 pub struct UpdateConversationRequest {
     pub name: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct ConversationParticipantRequest {
+pub struct CreateConversationRequest {
     pub conversation_type: ConversationType,
     pub sender_id: Uuid,
     pub participants: Vec<Uuid>,
@@ -78,7 +72,7 @@ pub struct ParticipantResponse {
 }
 
 #[derive(Debug, Serialize, Clone)]
-pub struct ConversationParticipantResponse {
+pub struct ConversationResponse {
     pub id: Uuid,
     pub conversation_type: ConversationType,
     pub name: Option<String>,

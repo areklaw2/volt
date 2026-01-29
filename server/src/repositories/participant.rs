@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
 use anyhow::Ok;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::dto::{CreateParticipantsRequest, UpdateParticipantRequest};
+use crate::{
+    dto::{CreateParticipantsRequest, UpdateParticipantRequest},
+    repositories::{DbRepository, InMemoryRepository},
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 pub struct Participant {
@@ -34,27 +33,10 @@ pub trait ParticipantRepository: Send + Sync {
     async fn delete_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
-#[derive(Debug, Default)]
-pub struct InMemoryParticipantRepository {
-    participants: RwLock<HashMap<(Uuid, Uuid), Participant>>,
-    user_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
-    conversation_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
-}
-
-impl InMemoryParticipantRepository {
-    pub fn new() -> Self {
-        Self {
-            participants: RwLock::default(),
-            user_index: RwLock::default(),
-            conversation_index: RwLock::default(),
-        }
-    }
-}
-
 #[async_trait]
-impl ParticipantRepository for InMemoryParticipantRepository {
+impl ParticipantRepository for InMemoryRepository {
     async fn create_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<Participant, anyhow::Error> {
-        let mut participants = self.participants.write().await;
+        let mut participants = self.participants_repo.write().await;
         let mut conversation_index = self.conversation_index.write().await;
         let mut user_index = self.user_index.write().await;
 
@@ -76,7 +58,7 @@ impl ParticipantRepository for InMemoryParticipantRepository {
     }
 
     async fn create_conversation_participants(&self, request: CreateParticipantsRequest) -> Result<Vec<Participant>, anyhow::Error> {
-        let mut participants = self.participants.write().await;
+        let mut participants = self.participants_repo.write().await;
         let mut conversation_index = self.conversation_index.write().await;
         let mut user_index = self.user_index.write().await;
 
@@ -109,11 +91,11 @@ impl ParticipantRepository for InMemoryParticipantRepository {
 
     async fn read_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<Option<Participant>, anyhow::Error> {
         let key = (user_id, conversation_id);
-        Ok(self.participants.read().await.get(&key).cloned())
+        Ok(self.participants_repo.read().await.get(&key).cloned())
     }
 
     async fn read_conversation_participants(&self, conversation_id: Uuid) -> Result<Vec<Participant>, anyhow::Error> {
-        let participants = self.participants.read().await;
+        let participants = self.participants_repo.read().await;
         let conversation_index = self.conversation_index.read().await;
 
         let result = match conversation_index.get(&conversation_id) {
@@ -128,7 +110,7 @@ impl ParticipantRepository for InMemoryParticipantRepository {
     }
 
     async fn read_participant_conversations(&self, user_id: Uuid) -> Result<Vec<Participant>, anyhow::Error> {
-        let participants = self.participants.read().await;
+        let participants = self.participants_repo.read().await;
         let user_index = self.user_index.read().await;
 
         let result = match user_index.get(&user_id) {
@@ -149,7 +131,7 @@ impl ParticipantRepository for InMemoryParticipantRepository {
         request: UpdateParticipantRequest,
     ) -> Result<Option<Participant>, anyhow::Error> {
         let key = (user_id, conversation_id);
-        let mut participants = self.participants.write().await;
+        let mut participants = self.participants_repo.write().await;
         let Some(participant) = participants.get_mut(&key) else {
             return Ok(None);
         };
@@ -169,7 +151,7 @@ impl ParticipantRepository for InMemoryParticipantRepository {
 
     async fn delete_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error> {
         let key = (user_id, conversation_id);
-        self.participants.write().await.remove(&key);
+        self.participants_repo.write().await.remove(&key);
 
         let mut user_index = self.user_index.write().await;
         if let Some(conversation_ids) = user_index.get_mut(&user_id) {
@@ -185,21 +167,9 @@ impl ParticipantRepository for InMemoryParticipantRepository {
     }
 }
 
-#[derive(Debug)]
-#[allow(unused)]
-pub struct DbParticipantRepository {
-    pool: Pool<Postgres>,
-}
-
-impl DbParticipantRepository {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self { pool }
-    }
-}
-
 #[async_trait]
 #[allow(unused)]
-impl ParticipantRepository for DbParticipantRepository {
+impl ParticipantRepository for DbRepository {
     async fn create_participant(&self, user_id: Uuid, conversation_id: Uuid) -> Result<Participant, anyhow::Error> {
         todo!()
     }
@@ -240,7 +210,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_participant_creates_participant() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user1 = Uuid::now_v7();
 
@@ -259,7 +229,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_participants_creates_participants_for_multiple_users() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user1 = Uuid::now_v7();
         let user2 = Uuid::now_v7();
@@ -272,7 +242,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_participants_sets_timestamps_for_sender() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         let request = create_request(sender_id, conversation_id, vec![sender_id]);
@@ -286,7 +256,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_participants_non_sender_has_none_timestamps() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         let other_user = Uuid::now_v7();
@@ -301,7 +271,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_conversation_participants_are_persisted_and_readable() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user_id = Uuid::now_v7();
         let request = create_request(user_id, conversation_id, vec![user_id]);
@@ -315,7 +285,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_participant_returns_existing_participant() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user_id = Uuid::now_v7();
         let request = create_request(user_id, conversation_id, vec![user_id]);
@@ -329,7 +299,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_participant_returns_none_for_nonexistent_participant() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let random_user = Uuid::now_v7();
         let random_conversation = Uuid::now_v7();
 
@@ -340,7 +310,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_conversation_participants_returns_all_participants() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user1 = Uuid::now_v7();
         let user2 = Uuid::now_v7();
@@ -357,7 +327,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_conversation_participants_returns_empty_for_nonexistent_conversation() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let random_conversation = Uuid::now_v7();
 
         let participants = repo.read_conversation_participants(random_conversation).await.unwrap();
@@ -367,7 +337,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_participant_conversations_returns_all_conversations() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let user_id = Uuid::now_v7();
         let conv1 = Uuid::now_v7();
         let conv2 = Uuid::now_v7();
@@ -386,7 +356,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_participant_conversations_returns_empty_for_user_not_in_any() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let random_user = Uuid::now_v7();
 
         let conversations = repo.read_participant_conversations(random_user).await.unwrap();
@@ -396,7 +366,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_participant_updates_joined_at_when_none() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         let other_user = Uuid::now_v7();
@@ -415,7 +385,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_participant_does_not_overwrite_existing_joined_at() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let sender_id = Uuid::now_v7();
         let request = create_request(sender_id, conversation_id, vec![sender_id]);
@@ -436,7 +406,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_participant_updates_last_read_at() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user_id = Uuid::now_v7();
         let request = create_request(user_id, conversation_id, vec![user_id]);
@@ -454,7 +424,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_participant_returns_none_for_nonexistent() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let random_user = Uuid::now_v7();
         let random_conversation = Uuid::now_v7();
 
@@ -469,7 +439,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_participant_removes_from_main_storage() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user_id = Uuid::now_v7();
         let request = create_request(user_id, conversation_id, vec![user_id]);
@@ -483,7 +453,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_participant_removes_from_conversation_index() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
         let user1 = Uuid::now_v7();
         let user2 = Uuid::now_v7();
@@ -499,7 +469,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_participant_removes_from_user_index() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let user_id = Uuid::now_v7();
         let conv1 = Uuid::now_v7();
         let conv2 = Uuid::now_v7();
@@ -517,7 +487,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_participant_succeeds_for_nonexistent() {
-        let repo = InMemoryParticipantRepository::new();
+        let repo = InMemoryRepository::new();
         let random_user = Uuid::now_v7();
         let random_conversation = Uuid::now_v7();
 

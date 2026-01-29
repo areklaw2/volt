@@ -1,14 +1,13 @@
-use std::collections::HashMap;
-
 use anyhow::Ok;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
-use crate::dto::{CreateUserRequest, UpdateUserRequest};
+use crate::{
+    dto::{CreateUserRequest, UpdateUserRequest},
+    repositories::{DbRepository, InMemoryRepository},
+};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
@@ -28,19 +27,8 @@ pub trait UserRepository: Send + Sync {
     async fn delete_user(&self, user_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
-#[derive(Debug, Default)]
-pub struct InMemoryUserRepository {
-    users: tokio::sync::RwLock<HashMap<Uuid, User>>,
-}
-
-impl InMemoryUserRepository {
-    pub fn new() -> Self {
-        Self { users: RwLock::default() }
-    }
-}
-
 #[async_trait]
-impl UserRepository for InMemoryUserRepository {
+impl UserRepository for InMemoryRepository {
     async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
         let user = User {
             id: Uuid::now_v7(),
@@ -50,22 +38,22 @@ impl UserRepository for InMemoryUserRepository {
             created_at: Utc::now(),
         };
 
-        self.users.write().await.insert(user.id, user.clone());
+        self.user_repos.write().await.insert(user.id, user.clone());
 
         Ok(user)
     }
 
     async fn read_user(&self, user_id: Uuid) -> Result<Option<User>, anyhow::Error> {
-        Ok(self.users.read().await.get(&user_id).cloned())
+        Ok(self.user_repos.read().await.get(&user_id).cloned())
     }
 
     async fn read_users(&self, user_ids: Vec<Uuid>) -> Result<Vec<User>, anyhow::Error> {
-        let users = self.users.read().await;
+        let users = self.user_repos.read().await;
         Ok(user_ids.iter().filter_map(|id| users.get(id).cloned()).collect())
     }
 
     async fn update_user(&self, user_id: Uuid, request: UpdateUserRequest) -> Result<Option<User>, anyhow::Error> {
-        let mut users = self.users.write().await;
+        let mut users = self.user_repos.write().await;
         let Some(user) = users.get_mut(&user_id) else {
             return Ok(None);
         };
@@ -81,26 +69,14 @@ impl UserRepository for InMemoryUserRepository {
     }
 
     async fn delete_user(&self, user_id: Uuid) -> Result<(), anyhow::Error> {
-        self.users.write().await.remove(&user_id);
+        self.user_repos.write().await.remove(&user_id);
         Ok(())
-    }
-}
-
-#[derive(Debug)]
-#[allow(unused)]
-pub struct DbUserRepository {
-    pool: Pool<Postgres>,
-}
-
-impl DbUserRepository {
-    pub fn new(pool: Pool<Postgres>) -> Self {
-        Self { pool }
     }
 }
 
 #[async_trait]
 #[allow(unused)]
-impl UserRepository for DbUserRepository {
+impl UserRepository for DbRepository {
     async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
         todo!()
     }
@@ -136,7 +112,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_user_returns_user_with_correct_fields() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice Smith", "https://example.com/alice.png");
 
         let user = repo.create_user(request).await.unwrap();
@@ -148,7 +124,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_user_generates_unique_id() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request1 = create_request("alice", "Alice", "https://example.com/a.png");
         let request2 = create_request("bob", "Bob", "https://example.com/b.png");
 
@@ -160,7 +136,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_user_sets_created_at_timestamp() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let before = Utc::now();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
 
@@ -172,7 +148,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_user_persists_user() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
 
         let created = repo.create_user(request).await.unwrap();
@@ -184,7 +160,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_user_returns_existing_user() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice Smith", "https://example.com/a.png");
         let created = repo.create_user(request).await.unwrap();
 
@@ -197,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn read_user_returns_none_for_nonexistent_user() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let result = repo.read_user(random_id).await.unwrap();
@@ -207,7 +183,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_user_updates_display_name_only() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
         let created = repo.create_user(request).await.unwrap();
 
@@ -223,7 +199,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_user_updates_avatar_url_only() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
         let created = repo.create_user(request).await.unwrap();
 
@@ -239,7 +215,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_user_updates_both_fields() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
         let created = repo.create_user(request).await.unwrap();
 
@@ -255,7 +231,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_user_with_all_none_leaves_user_unchanged() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
         let created = repo.create_user(request).await.unwrap();
 
@@ -271,7 +247,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_user_returns_none_for_nonexistent_user() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let update = UpdateUserRequest {
@@ -285,7 +261,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_user_removes_existing_user() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice", "https://example.com/a.png");
         let created = repo.create_user(request).await.unwrap();
 
@@ -297,7 +273,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_user_succeeds_for_nonexistent_user() {
-        let repo = InMemoryUserRepository::new();
+        let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
 
         let result = repo.delete_user(random_id).await;
