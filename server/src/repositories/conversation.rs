@@ -2,12 +2,10 @@ use anyhow::Ok;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
     dto::{CreateConversationRequest, UpdateConversationRequest},
-    errors::AppError,
     repositories::{DbRepository, InMemoryRepository, participant::Participant, user::User},
 };
 
@@ -136,20 +134,20 @@ impl ConversationRepository for InMemoryRepository {
 
     async fn delete_conversation(&self, id: Uuid) -> Result<(), anyhow::Error> {
         let Some(conversation) = self.conversations_repo.read().await.get(&id).cloned() else {
-            return Ok();
+            return Ok(());
         };
 
-        let key = (user_id, conversation_id);
-        self.participants_repo.write().await.remove(&key);
-
-        let mut user_index = self.user_index.write().await;
-        if let Some(conversation_ids) = user_index.get_mut(&user_id) {
-            conversation_ids.retain(|id| *id != conversation_id);
-        }
-
         let mut conversation_index = self.conversation_index.write().await;
-        if let Some(user_ids) = conversation_index.get_mut(&conversation_id) {
-            user_ids.retain(|id| *id != user_id);
+        let user_ids = conversation_index.remove(&conversation.id).unwrap_or_default();
+
+        let mut participants_repo = self.participants_repo.write().await;
+        let mut user_index = self.user_index.write().await;
+
+        for user_id in user_ids {
+            participants_repo.remove(&(user_id, conversation.id));
+            if let Some(conversation_ids) = user_index.get_mut(&user_id) {
+                conversation_ids.retain(|cid| *cid != conversation.id);
+            }
         }
 
         self.conversations_repo.write().await.remove(&id);
@@ -180,81 +178,147 @@ impl ConversationRepository for DbRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::dto::CreateUserRequest;
+    use crate::repositories::user::UserRepository;
 
-    fn create_request(conversation_type: ConversationType, name: Option<&str>) -> CreateConversationRequest {
+    async fn setup_users(repo: &InMemoryRepository, count: usize) -> Vec<User> {
+        let mut users = Vec::new();
+        for i in 0..count {
+            let user = repo
+                .create_user(CreateUserRequest {
+                    username: format!("user{i}"),
+                    display_name: format!("User {i}"),
+                    avatar_url: format!("https://example.com/{i}.png"),
+                })
+                .await
+                .unwrap();
+            users.push(user);
+        }
+        users
+    }
+
+    fn create_request(
+        conversation_type: ConversationType,
+        name: Option<&str>,
+        sender_id: Uuid,
+        participants: Vec<Uuid>,
+    ) -> CreateConversationRequest {
         CreateConversationRequest {
             conversation_type,
             name: name.map(String::from),
+            sender_id,
+            participants,
         }
     }
 
     #[tokio::test]
     async fn create_conversation_returns_conversation_with_correct_fields() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Group, Some("Test Group"));
+        let users = setup_users(&repo, 2).await;
+        let sender = users[0].id;
+        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+        let request = create_request(ConversationType::Group, Some("Test Group"), sender, participant_ids);
 
-        let conversation = repo.create_conversation(request).await.unwrap();
+        let agg = repo.create_conversation(request).await.unwrap();
 
-        assert_eq!(conversation.conversation_type, ConversationType::Group);
-        assert_eq!(conversation.name, Some("Test Group".to_string()));
+        assert_eq!(agg.conversation.conversation_type, ConversationType::Group);
+        assert_eq!(agg.conversation.name, Some("Test Group".to_string()));
+        assert_eq!(agg.participants.len(), 2);
+        assert_eq!(agg.users.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn create_conversation_sets_sender_timestamps() {
+        let repo = InMemoryRepository::new();
+        let users = setup_users(&repo, 2).await;
+        let sender = users[0].id;
+        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+        let request = create_request(ConversationType::Direct, None, sender, participant_ids);
+
+        let agg = repo.create_conversation(request).await.unwrap();
+
+        let sender_participant = agg.participants.iter().find(|p| p.user_id == sender).unwrap();
+        assert!(sender_participant.joined_at.is_some());
+        assert!(sender_participant.last_read_at.is_some());
+
+        let other_participant = agg.participants.iter().find(|p| p.user_id != sender).unwrap();
+        assert!(other_participant.joined_at.is_none());
+        assert!(other_participant.last_read_at.is_none());
     }
 
     #[tokio::test]
     async fn create_conversation_generates_unique_id() {
         let repo = InMemoryRepository::new();
-        let request1 = create_request(ConversationType::Direct, None);
-        let request2 = create_request(ConversationType::Group, Some("Group"));
+        let users = setup_users(&repo, 1).await;
+        let uid = users[0].id;
+        let request1 = create_request(ConversationType::Direct, None, uid, vec![uid]);
+        let request2 = create_request(ConversationType::Group, Some("Group"), uid, vec![uid]);
 
         let conv1 = repo.create_conversation(request1).await.unwrap();
         let conv2 = repo.create_conversation(request2).await.unwrap();
 
-        assert_ne!(conv1.id, conv2.id);
+        assert_ne!(conv1.conversation.id, conv2.conversation.id);
     }
 
     #[tokio::test]
     async fn create_conversation_sets_created_at_timestamp() {
         let repo = InMemoryRepository::new();
+        let users = setup_users(&repo, 1).await;
+        let uid = users[0].id;
         let before = Utc::now();
-        let request = create_request(ConversationType::Direct, None);
+        let request = create_request(ConversationType::Direct, None, uid, vec![uid]);
 
-        let conversation = repo.create_conversation(request).await.unwrap();
+        let agg = repo.create_conversation(request).await.unwrap();
 
         let after = Utc::now();
-        assert!(conversation.created_at >= before && conversation.created_at <= after);
+        assert!(agg.conversation.created_at >= before && agg.conversation.created_at <= after);
     }
 
     #[tokio::test]
     async fn create_direct_conversation_has_no_name() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Direct, None);
+        let users = setup_users(&repo, 1).await;
+        let uid = users[0].id;
+        let request = create_request(ConversationType::Direct, None, uid, vec![uid]);
 
-        let conversation = repo.create_conversation(request).await.unwrap();
+        let agg = repo.create_conversation(request).await.unwrap();
 
-        assert_eq!(conversation.conversation_type, ConversationType::Direct);
-        assert!(conversation.name.is_none());
+        assert_eq!(agg.conversation.conversation_type, ConversationType::Direct);
+        assert!(agg.conversation.name.is_none());
     }
 
     #[tokio::test]
     async fn create_group_conversation_has_name() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Group, Some("My Group Chat"));
+        let users = setup_users(&repo, 1).await;
+        let uid = users[0].id;
+        let request = create_request(ConversationType::Group, Some("My Group Chat"), uid, vec![uid]);
 
-        let conversation = repo.create_conversation(request).await.unwrap();
+        let agg = repo.create_conversation(request).await.unwrap();
 
-        assert_eq!(conversation.conversation_type, ConversationType::Group);
-        assert_eq!(conversation.name, Some("My Group Chat".to_string()));
+        assert_eq!(agg.conversation.conversation_type, ConversationType::Group);
+        assert_eq!(agg.conversation.name, Some("My Group Chat".to_string()));
     }
 
     #[tokio::test]
-    async fn read_conversation_returns_existing() {
+    async fn read_conversation_returns_existing_with_participants_and_users() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Group, Some("Test"));
+        let users = setup_users(&repo, 3).await;
+        let sender = users[0].id;
+        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+        let request = create_request(ConversationType::Group, Some("Test"), sender, participant_ids.clone());
         let created = repo.create_conversation(request).await.unwrap();
 
-        let conversation = repo.read_conversation(created.id).await.unwrap().unwrap();
+        let read = repo.read_conversation(created.conversation.id).await.unwrap().unwrap();
 
-        assert_eq!(conversation.id, created.id);
-        assert_eq!(conversation.name, Some("Test".to_string()));
+        assert_eq!(read.conversation.id, created.conversation.id);
+        assert_eq!(read.conversation.name, Some("Test".to_string()));
+        assert_eq!(read.participants.len(), 3);
+        assert_eq!(read.users.len(), 3);
+        for uid in &participant_ids {
+            assert!(read.participants.iter().any(|p| p.user_id == *uid));
+            assert!(read.users.iter().any(|u| u.id == *uid));
+        }
     }
 
     #[tokio::test]
@@ -270,13 +334,15 @@ mod tests {
     #[tokio::test]
     async fn update_conversation_updates_name() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Group, Some("Original"));
+        let users = setup_users(&repo, 1).await;
+        let uid = users[0].id;
+        let request = create_request(ConversationType::Group, Some("Original"), uid, vec![uid]);
         let created = repo.create_conversation(request).await.unwrap();
 
         let update = UpdateConversationRequest {
             name: Some("Updated Name".to_string()),
         };
-        let updated = repo.update_conversation(created.id, update).await.unwrap().unwrap();
+        let updated = repo.update_conversation(created.conversation.id, update).await.unwrap().unwrap();
 
         assert_eq!(updated.name, Some("Updated Name".to_string()));
     }
@@ -284,15 +350,17 @@ mod tests {
     #[tokio::test]
     async fn update_conversation_sets_updated_at() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Group, Some("Test"));
+        let users = setup_users(&repo, 1).await;
+        let uid = users[0].id;
+        let request = create_request(ConversationType::Group, Some("Test"), uid, vec![uid]);
         let created = repo.create_conversation(request).await.unwrap();
-        assert!(created.updated_at.is_none());
+        assert!(created.conversation.updated_at.is_none());
 
         let before = Utc::now();
         let update = UpdateConversationRequest {
             name: Some("New Name".to_string()),
         };
-        let updated = repo.update_conversation(created.id, update).await.unwrap().unwrap();
+        let updated = repo.update_conversation(created.conversation.id, update).await.unwrap().unwrap();
         let after = Utc::now();
 
         assert!(updated.updated_at.is_some());
@@ -314,15 +382,39 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_conversation_removes_conversation() {
+    async fn delete_conversation_removes_conversation_and_participants() {
         let repo = InMemoryRepository::new();
-        let request = create_request(ConversationType::Direct, None);
+        let users = setup_users(&repo, 2).await;
+        let sender = users[0].id;
+        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+        let request = create_request(ConversationType::Direct, None, sender, participant_ids.clone());
         let created = repo.create_conversation(request).await.unwrap();
+        let conv_id = created.conversation.id;
 
-        repo.delete_conversation(created.id).await.unwrap();
+        repo.delete_conversation(conv_id).await.unwrap();
 
-        let read = repo.read_conversation(created.id).await.unwrap();
+        let read = repo.read_conversation(conv_id).await.unwrap();
         assert!(read.is_none());
+
+        // Verify participants were cleaned up
+        let participants_repo = repo.participants_repo.read().await;
+        for uid in &participant_ids {
+            assert!(participants_repo.get(&(*uid, conv_id)).is_none());
+        }
+        drop(participants_repo);
+
+        // Verify conversation_index was cleaned up
+        let conversation_index = repo.conversation_index.read().await;
+        assert!(conversation_index.get(&conv_id).is_none());
+        drop(conversation_index);
+
+        // Verify user_index entries were cleaned up
+        let user_index = repo.user_index.read().await;
+        for uid in &participant_ids {
+            if let Some(conv_ids) = user_index.get(uid) {
+                assert!(!conv_ids.contains(&conv_id));
+            }
+        }
     }
 
     #[tokio::test]

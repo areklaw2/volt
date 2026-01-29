@@ -11,89 +11,65 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    dto::{
-        ConversationResponse, CreateConversationRequest, CreateParticipantsRequest, ParticipantResponse, UpdateConversationRequest,
-    },
+    dto::{ConversationResponse, CreateConversationRequest, ParticipantResponse, UpdateConversationRequest},
     errors::AppError,
-    repositories::conversation::{Conversation, ConversationType},
+    repositories::conversation::{Conversation, ConversationAggregate, ConversationType},
 };
+
+//TODO: move this to seperate dto file
+fn conversation_response_from(agg: ConversationAggregate) -> ConversationResponse {
+    let users_map: HashMap<Uuid, _> = agg.users.into_iter().map(|u| (u.id, u)).collect();
+    let participant_responses: Vec<ParticipantResponse> = agg
+        .participants
+        .into_iter()
+        .filter_map(|p| {
+            users_map.get(&p.user_id).map(|user| ParticipantResponse {
+                id: user.id,
+                username: user.username.clone(),
+                display_name: user.display_name.clone(),
+                avatar_url: user.avatar_url.clone(),
+                joined_at: p.joined_at,
+                last_read_at: p.last_read_at,
+            })
+        })
+        .collect();
+
+    ConversationResponse {
+        id: agg.conversation.id,
+        conversation_type: agg.conversation.conversation_type,
+        name: agg.conversation.name,
+        participants: participant_responses,
+        created_at: agg.conversation.created_at,
+        updated_at: agg.conversation.updated_at,
+    }
+}
 
 pub async fn create_conversation(
     State(state): State<Arc<AppState>>,
     Json(request): Json<CreateConversationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let conversation = state.repository.create_conversation(request).await?;
+    let agg = state.repository.create_conversation(request).await?;
 
-    let participants = state.repository.create_conversation_participants(participants_request).await?;
-    let users = state.repository.read_users(request.participants).await?;
-
-    if participants.len() != users.len() {
+    if agg.participants.len() != agg.users.len() {
         return Err(AppError::bad_request("A requested participant may not exist"));
     }
 
-    let users_map: HashMap<Uuid, _> = users.into_iter().map(|u| (u.id, u)).collect();
-    let participant_responses: Vec<ParticipantResponse> = participants
-        .into_iter()
-        .filter_map(|p| {
-            users_map.get(&p.user_id).map(|user| ParticipantResponse {
-                id: user.id,
-                username: user.username.clone(),
-                display_name: user.display_name.clone(),
-                avatar_url: user.avatar_url.clone(),
-                joined_at: p.joined_at,
-                last_read_at: p.last_read_at,
-            })
-        })
-        .collect();
-
-    let response = ConversationResponse {
-        id: conversation.id,
-        conversation_type: conversation.conversation_type,
-        name: conversation.name,
-        participants: participant_responses,
-        created_at: conversation.created_at,
-        updated_at: conversation.updated_at,
-    };
-
+    let response = conversation_response_from(agg);
     Ok((StatusCode::CREATED, Json(response)))
 }
 
 pub async fn get_conversation(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>) -> Result<impl IntoResponse, AppError> {
-    let Some(conversation) = state.conversations.read_conversation(id).await? else {
-        return Err(AppError::not_found("Conversation not found"));
-    };
+    let agg = state
+        .repository
+        .read_conversation(id)
+        .await?
+        .ok_or_else(|| AppError::not_found("Conversation not found"))?;
 
-    let participants = state.participants.read_conversation_participants(conversation.id).await?;
-    let user_ids: Vec<Uuid> = participants.iter().map(|p| p.user_id).collect();
-    let users = state.users.read_users(user_ids).await?;
-    if participants.len() != users.len() {
+    if agg.participants.len() != agg.users.len() {
         return Err(AppError::bad_request("A requested participant may not exist"));
     }
 
-    let users_map: HashMap<Uuid, _> = users.into_iter().map(|u| (u.id, u)).collect();
-    let participant_responses: Vec<ParticipantResponse> = participants
-        .into_iter()
-        .filter_map(|p| {
-            users_map.get(&p.user_id).map(|user| ParticipantResponse {
-                id: user.id,
-                username: user.username.clone(),
-                display_name: user.display_name.clone(),
-                avatar_url: user.avatar_url.clone(),
-                joined_at: p.joined_at,
-                last_read_at: p.last_read_at,
-            })
-        })
-        .collect();
-
-    let response = ConversationResponse {
-        id: conversation.id,
-        conversation_type: conversation.conversation_type,
-        name: conversation.name,
-        participants: participant_responses,
-        created_at: conversation.created_at,
-        updated_at: conversation.updated_at,
-    };
-
+    let response = conversation_response_from(agg);
     Ok((StatusCode::OK, Json(response)))
 }
 
@@ -102,18 +78,18 @@ pub async fn update_conversation(
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateConversationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let conversation = state
-        .conversations
+    let agg = state
+        .repository
         .read_conversation(id)
         .await?
         .ok_or_else(|| AppError::not_found("Conversation not found"))?;
 
-    if conversation.conversation_type != ConversationType::Group {
-        return Ok(Json(conversation));
+    if agg.conversation.conversation_type != ConversationType::Group {
+        return Ok(Json(agg.conversation));
     }
 
     let update_request = UpdateConversationRequest { name: input.name };
-    match state.conversations.update_conversation(id, update_request).await? {
+    match state.repository.update_conversation(id, update_request).await? {
         Some(updated) => Ok(Json(updated)),
         None => Err(AppError::not_found("Conversation not found")),
     }
@@ -124,7 +100,7 @@ pub async fn join_conversation(
     Path(id): Path<Uuid>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    state.participants.create_participant(user_id, id).await?;
+    state.repository.create_participant(user_id, id).await?;
     Ok(StatusCode::CREATED)
 }
 
@@ -133,7 +109,7 @@ pub async fn leave_conversation(
     Path(id): Path<Uuid>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    state.participants.delete_participant(user_id, id).await?;
+    state.repository.delete_participant(user_id, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -164,13 +140,13 @@ pub async fn query_users_conversations(
     State(state): State<Arc<AppState>>,
     Path(user_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user_participants = state.participants.read_participant_conversations(user_id).await?;
+    let user_participants = state.repository.read_participant_conversations(user_id).await?;
     let conversation_ids: Vec<Uuid> = user_participants.iter().map(|p| p.conversation_id).collect();
 
     let mut conversations: Vec<Conversation> = Vec::new();
     for conversation_id in conversation_ids {
-        if let Some(conversation) = state.conversations.read_conversation(conversation_id).await? {
-            conversations.push(conversation);
+        if let Some(agg) = state.repository.read_conversation(conversation_id).await? {
+            conversations.push(agg.conversation);
         }
     }
 
