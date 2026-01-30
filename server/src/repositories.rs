@@ -7,7 +7,7 @@ use uuid::Uuid;
 use crate::repositories::{
     conversation::{Conversation, ConversationRepository},
     message::{Message, MessageRepository},
-    participant::{Participant, ParticipantRepository},
+    participant::{UserConversation, UserConversationRepository},
     user::{User, UserRepository},
 };
 
@@ -16,7 +16,7 @@ pub mod message;
 pub mod participant;
 pub mod user;
 
-pub trait Repository: Send + Sync + ConversationRepository + MessageRepository + ParticipantRepository + UserRepository {}
+pub trait Repository: Send + Sync + ConversationRepository + MessageRepository + UserConversationRepository + UserRepository {}
 
 pub struct DbRepository {
     pub pool: Pool<Postgres>,
@@ -34,7 +34,7 @@ pub struct InMemoryRepository {
     conversations_repo: RwLock<HashMap<Uuid, Conversation>>,
     messages_repo: RwLock<HashMap<Uuid, Message>>,
     user_repos: RwLock<HashMap<Uuid, User>>,
-    participants_repo: RwLock<HashMap<(Uuid, Uuid), Participant>>,
+    user_conversations_repo: RwLock<HashMap<(Uuid, Uuid), UserConversation>>,
     user_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
     conversation_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
 }
@@ -47,7 +47,7 @@ impl InMemoryRepository {
             conversations_repo: RwLock::default(),
             messages_repo: RwLock::default(),
             user_repos: RwLock::default(),
-            participants_repo: RwLock::default(),
+            user_conversations_repo: RwLock::default(),
             user_index: RwLock::default(),
             conversation_index: RwLock::default(),
         }

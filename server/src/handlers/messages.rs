@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    dto::{Pagination, UpdateMessageRequest},
+    dto::{mesagge::UpdateMessageRequest, pagination::Pagination},
     errors::AppError,
 };
 

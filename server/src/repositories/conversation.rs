@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    dto::{CreateConversationRequest, UpdateConversationRequest},
-    repositories::{DbRepository, InMemoryRepository, participant::Participant, user::User},
+    dto::conversation::{CreateConversationRequest, UpdateConversationRequest},
+    repositories::{DbRepository, InMemoryRepository, participant::UserConversation, user::User},
 };
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -27,7 +27,7 @@ pub struct Conversation {
 
 pub struct ConversationAggregate {
     pub conversation: Conversation,
-    pub participants: Vec<Participant>,
+    pub user_conversations: Vec<UserConversation>,
     pub users: Vec<User>,
 }
 
@@ -35,6 +35,7 @@ pub struct ConversationAggregate {
 pub trait ConversationRepository: Send + Sync {
     async fn create_conversation(&self, request: CreateConversationRequest) -> Result<ConversationAggregate, anyhow::Error>;
     async fn read_conversation(&self, id: Uuid) -> Result<Option<ConversationAggregate>, anyhow::Error>;
+    async fn read_conversations_by_user(&self, user_id: Uuid) -> Result<Vec<ConversationAggregate>, anyhow::Error>;
     async fn update_conversation(&self, id: Uuid, request: UpdateConversationRequest) -> Result<Option<Conversation>, anyhow::Error>;
     async fn delete_conversation(&self, id: Uuid) -> Result<(), anyhow::Error>;
 }
@@ -52,13 +53,13 @@ impl ConversationRepository for InMemoryRepository {
 
         self.conversations_repo.write().await.insert(conversation.id, conversation.clone());
 
-        let mut participants_repo = self.participants_repo.write().await;
+        let mut user_conversations_repo = self.user_conversations_repo.write().await;
         let mut conversation_index = self.conversation_index.write().await;
         let mut user_index = self.user_index.write().await;
 
-        let mut participants = Vec::new();
+        let mut user_conversations = Vec::new();
         for user_id in request.participants {
-            let mut participant = Participant {
+            let mut participant = UserConversation {
                 user_id: user_id,
                 conversation_id: conversation.id,
                 joined_at: None,
@@ -72,19 +73,22 @@ impl ConversationRepository for InMemoryRepository {
             }
 
             let key = (user_id, conversation.id);
-            participants_repo.insert(key, participant.clone());
+            user_conversations_repo.insert(key, participant.clone());
 
             user_index.entry(user_id).or_default().push(conversation.id);
             conversation_index.entry(conversation.id).or_default().push(user_id);
 
-            participants.push(participant);
+            user_conversations.push(participant);
         }
 
         let users_repo = self.user_repos.read().await;
-        let users: Vec<User> = participants.iter().filter_map(|id| users_repo.get(&id.user_id).cloned()).collect();
+        let users: Vec<User> = user_conversations
+            .iter()
+            .filter_map(|id| users_repo.get(&id.user_id).cloned())
+            .collect();
         let result = ConversationAggregate {
             conversation,
-            participants,
+            user_conversations,
             users,
         };
 
@@ -96,31 +100,68 @@ impl ConversationRepository for InMemoryRepository {
             return Ok(None);
         };
 
-        let participants_repo = self.participants_repo.read().await;
+        let user_conversations_repo = self.user_conversations_repo.read().await;
         let conversation_index = self.conversation_index.read().await;
-        let participants = match conversation_index.get(&conversation.id) {
+        let user_conversations = match conversation_index.get(&conversation.id) {
             Some(user_ids) => user_ids
                 .iter()
-                .filter_map(|user_id| participants_repo.get(&(*user_id, conversation.id)).cloned())
+                .filter_map(|user_id| user_conversations_repo.get(&(*user_id, conversation.id)).cloned())
                 .collect(),
             None => Vec::new(),
         };
 
         let users_repo = self.user_repos.read().await;
-        let users: Vec<User> = participants.iter().filter_map(|id| users_repo.get(&id.user_id).cloned()).collect();
+        let users: Vec<User> = user_conversations
+            .iter()
+            .filter_map(|id| users_repo.get(&id.user_id).cloned())
+            .collect();
 
         let result = ConversationAggregate {
             conversation,
-            participants,
+            user_conversations,
             users,
         };
 
         Ok(Some(result))
     }
 
+    async fn read_conversations_by_user(&self, user_id: Uuid) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
+        let users_repo = self.user_repos.read().await;
+        let Some(user) = users_repo.get(&user_id) else {
+            return Ok(Vec::new());
+        };
+
+        let user_conversations_repo = self.user_conversations_repo.read().await;
+        let user_index = self.user_index.read().await;
+        let conversations_repo = self.conversations_repo.read().await;
+
+        let Some(conversation_ids) = user_index.get(&user_id) else {
+            return Ok(Vec::new());
+        };
+
+        let user_conversations: Vec<UserConversation> = conversation_ids
+            .iter()
+            .filter_map(|conversation_id| user_conversations_repo.get(&(user_id, *conversation_id)).cloned())
+            .collect();
+
+        let mut result: Vec<ConversationAggregate> = Vec::new();
+        for user_conversation in user_conversations {
+            if let Some(conversation) = conversations_repo.get(&user_conversation.conversation_id) {
+                let agg = ConversationAggregate {
+                    conversation: conversation.clone(),
+                    user_conversations: [user_conversation].to_vec(),
+                    users: [user.clone()].to_vec(),
+                };
+                result.push(agg);
+            }
+        }
+
+        Ok(result)
+    }
+
     async fn update_conversation(&self, id: Uuid, request: UpdateConversationRequest) -> Result<Option<Conversation>, anyhow::Error> {
-        let mut conversations = self.conversations_repo.write().await;
-        let Some(conversation) = conversations.get_mut(&id) else {
+        let mut conversations_repo = self.conversations_repo.write().await;
+        let Some(conversation) = conversations_repo.get_mut(&id) else {
             return Ok(None);
         };
 
@@ -140,11 +181,11 @@ impl ConversationRepository for InMemoryRepository {
         let mut conversation_index = self.conversation_index.write().await;
         let user_ids = conversation_index.remove(&conversation.id).unwrap_or_default();
 
-        let mut participants_repo = self.participants_repo.write().await;
+        let mut user_conversations_repo = self.user_conversations_repo.write().await;
         let mut user_index = self.user_index.write().await;
 
         for user_id in user_ids {
-            participants_repo.remove(&(user_id, conversation.id));
+            user_conversations_repo.remove(&(user_id, conversation.id));
             if let Some(conversation_ids) = user_index.get_mut(&user_id) {
                 conversation_ids.retain(|cid| *cid != conversation.id);
             }
@@ -166,6 +207,10 @@ impl ConversationRepository for DbRepository {
         todo!()
     }
 
+    async fn read_conversations_by_user(&self, user_id: Uuid) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
+        todo!()
+    }
+
     async fn update_conversation(&self, id: Uuid, request: UpdateConversationRequest) -> Result<Option<Conversation>, anyhow::Error> {
         todo!()
     }
@@ -178,7 +223,7 @@ impl ConversationRepository for DbRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dto::CreateUserRequest;
+    use crate::dto::user::CreateUserRequest;
     use crate::repositories::user::UserRepository;
 
     async fn setup_users(repo: &InMemoryRepository, count: usize) -> Vec<User> {
@@ -223,7 +268,7 @@ mod tests {
 
         assert_eq!(agg.conversation.conversation_type, ConversationType::Group);
         assert_eq!(agg.conversation.name, Some("Test Group".to_string()));
-        assert_eq!(agg.participants.len(), 2);
+        assert_eq!(agg.user_conversations.len(), 2);
         assert_eq!(agg.users.len(), 2);
     }
 
@@ -237,11 +282,11 @@ mod tests {
 
         let agg = repo.create_conversation(request).await.unwrap();
 
-        let sender_participant = agg.participants.iter().find(|p| p.user_id == sender).unwrap();
+        let sender_participant = agg.user_conversations.iter().find(|p| p.user_id == sender).unwrap();
         assert!(sender_participant.joined_at.is_some());
         assert!(sender_participant.last_read_at.is_some());
 
-        let other_participant = agg.participants.iter().find(|p| p.user_id != sender).unwrap();
+        let other_participant = agg.user_conversations.iter().find(|p| p.user_id != sender).unwrap();
         assert!(other_participant.joined_at.is_none());
         assert!(other_participant.last_read_at.is_none());
     }
@@ -301,7 +346,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_conversation_returns_existing_with_participants_and_users() {
+    async fn read_conversation_returns_existing_with_user_conversations_and_users() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 3).await;
         let sender = users[0].id;
@@ -313,10 +358,10 @@ mod tests {
 
         assert_eq!(read.conversation.id, created.conversation.id);
         assert_eq!(read.conversation.name, Some("Test".to_string()));
-        assert_eq!(read.participants.len(), 3);
+        assert_eq!(read.user_conversations.len(), 3);
         assert_eq!(read.users.len(), 3);
         for uid in &participant_ids {
-            assert!(read.participants.iter().any(|p| p.user_id == *uid));
+            assert!(read.user_conversations.iter().any(|p| p.user_id == *uid));
             assert!(read.users.iter().any(|u| u.id == *uid));
         }
     }
@@ -382,7 +427,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn delete_conversation_removes_conversation_and_participants() {
+    async fn delete_conversation_removes_conversation_and_user_conversations() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
         let sender = users[0].id;
@@ -396,12 +441,12 @@ mod tests {
         let read = repo.read_conversation(conv_id).await.unwrap();
         assert!(read.is_none());
 
-        // Verify participants were cleaned up
-        let participants_repo = repo.participants_repo.read().await;
+        // Verify user_conversations were cleaned up
+        let user_conversations_repo = repo.user_conversations_repo.read().await;
         for uid in &participant_ids {
-            assert!(participants_repo.get(&(*uid, conv_id)).is_none());
+            assert!(user_conversations_repo.get(&(*uid, conv_id)).is_none());
         }
-        drop(participants_repo);
+        drop(user_conversations_repo);
 
         // Verify conversation_index was cleaned up
         let conversation_index = repo.conversation_index.read().await;

@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    dto::{CreateMessageRequest, Pagination, UpdateMessageRequest},
+    dto::{
+        mesagge::{CreateMessageRequest, UpdateMessageRequest},
+        pagination::Pagination,
+    },
     repositories::{DbRepository, InMemoryRepository},
 };
 

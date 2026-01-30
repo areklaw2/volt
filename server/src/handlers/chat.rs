@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::{AppState, dto::CreateMessageRequest, repositories::message::Message};
+use crate::{AppState, dto::mesagge::CreateMessageRequest, repositories::message::Message};
 
 pub async fn chat(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
@@ -56,13 +56,13 @@ async fn handle_socket(stream: WebSocket, state: Arc<AppState>, user_id: Uuid) {
                 continue;
             };
 
-            let Ok(participants) = state_clone.repository.read_conversation_participants(conversation_id).await else {
-                tracing::error!("Failed to get participants");
+            let Ok(Some(conversation)) = state_clone.repository.read_conversation(conversation_id).await else {
+                tracing::error!("Failed to get conversation");
                 continue;
             };
 
             let connections = state_clone.active_connections.read().await;
-            for participant in participants {
+            for participant in conversation.user_conversations {
                 if let Some(senders) = connections.get(&participant.user_id) {
                     for sender in senders {
                         let _ = sender.send(message.clone()).await;
