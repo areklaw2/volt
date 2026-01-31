@@ -24,7 +24,7 @@ use crate::{
             create_conversation, get_conversation, join_conversation, leave_conversation, query_conversations_by_user,
             update_conversation,
         },
-        messages::{delete_message, query_messages, update_message},
+        messages::query_messages,
     },
 };
 
@@ -42,9 +42,7 @@ fn conversation_routes() -> Router<Arc<AppState>> {
 }
 
 fn message_routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/message/{id}", patch(update_message).delete(delete_message))
-        .route("/messages/{conversation_id}", get(query_messages))
+    Router::new().route("/messages/{conversation_id}", get(query_messages))
 }
 
 fn chat_routes() -> Router<Arc<AppState>> {

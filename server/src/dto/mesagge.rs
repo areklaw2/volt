@@ -7,8 +7,3 @@ pub struct CreateMessageRequest {
     pub sender_id: Uuid,
     pub content: String,
 }
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct UpdateMessageRequest {
-    pub content: Option<String>,
-}

@@ -5,10 +5,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    dto::{
-        mesagge::{CreateMessageRequest, UpdateMessageRequest},
-        pagination::Pagination,
-    },
+    dto::{mesagge::CreateMessageRequest, pagination::Pagination},
     repositories::{DbRepository, InMemoryRepository},
 };
 
@@ -25,10 +22,7 @@ pub struct Message {
 #[async_trait]
 pub trait MessageRepository: Send + Sync {
     async fn create_message(&self, request: CreateMessageRequest) -> Result<Message, anyhow::Error>;
-    async fn read_message(&self, message_id: Uuid) -> Result<Option<Message>, anyhow::Error>;
-    async fn list_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error>;
-    async fn update_message(&self, message_id: Uuid, request: UpdateMessageRequest) -> Result<Option<Message>, anyhow::Error>;
-    async fn delete_message(&self, message_id: Uuid) -> Result<(), anyhow::Error>;
+    async fn read_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error>;
 }
 
 #[async_trait]
@@ -48,11 +42,7 @@ impl MessageRepository for InMemoryRepository {
         Ok(message)
     }
 
-    async fn read_message(&self, message_id: Uuid) -> Result<Option<Message>, anyhow::Error> {
-        Ok(self.messages_repo.read().await.get(&message_id).cloned())
-    }
-
-    async fn list_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error> {
+    async fn read_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error> {
         let messages = self.messages_repo.read().await;
 
         let messages = messages
@@ -65,25 +55,6 @@ impl MessageRepository for InMemoryRepository {
 
         Ok(messages)
     }
-
-    async fn update_message(&self, message_id: Uuid, request: UpdateMessageRequest) -> Result<Option<Message>, anyhow::Error> {
-        let mut messages = self.messages_repo.write().await;
-        let Some(message) = messages.get_mut(&message_id) else {
-            return Ok(None);
-        };
-
-        if let Some(content) = request.content {
-            message.content = content;
-            message.updated_at = Some(Utc::now())
-        }
-
-        Ok(Some(message.clone()))
-    }
-
-    async fn delete_message(&self, message_id: Uuid) -> Result<(), anyhow::Error> {
-        self.messages_repo.write().await.remove(&message_id);
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -93,19 +64,7 @@ impl MessageRepository for DbRepository {
         todo!()
     }
 
-    async fn read_message(&self, message_id: Uuid) -> Result<Option<Message>, anyhow::Error> {
-        todo!()
-    }
-
-    async fn list_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error> {
-        todo!()
-    }
-
-    async fn update_message(&self, message_id: Uuid, request: UpdateMessageRequest) -> Result<Option<Message>, anyhow::Error> {
-        todo!()
-    }
-
-    async fn delete_message(&self, message_id: Uuid) -> Result<(), anyhow::Error> {
+    async fn read_messages(&self, conversation_id: Uuid, pagination: Pagination) -> Result<Vec<Message>, anyhow::Error> {
         todo!()
     }
 }
@@ -163,28 +122,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn read_message_returns_existing_message() {
-        let repo = InMemoryRepository::new();
-        let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Test message");
-        let created = repo.create_message(request).await.unwrap();
-
-        let message = repo.read_message(created.id).await.unwrap().unwrap();
-
-        assert_eq!(message.id, created.id);
-        assert_eq!(message.content, "Test message");
-    }
-
-    #[tokio::test]
-    async fn read_message_returns_none_for_nonexistent() {
-        let repo = InMemoryRepository::new();
-        let random_id = Uuid::now_v7();
-
-        let result = repo.read_message(random_id).await.unwrap();
-
-        assert!(result.is_none());
-    }
-
-    #[tokio::test]
     async fn list_messages_returns_messages_for_conversation() {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
@@ -192,7 +129,7 @@ mod tests {
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
         repo.create_message(create_request(conv_id, sender_id, "Second")).await.unwrap();
 
-        let messages = repo.list_messages(conv_id, Pagination::default()).await.unwrap();
+        let messages = repo.read_messages(conv_id, Pagination::default()).await.unwrap();
 
         assert_eq!(messages.len(), 2);
     }
@@ -206,7 +143,7 @@ mod tests {
         repo.create_message(create_request(conv1, sender_id, "Conv1 msg")).await.unwrap();
         repo.create_message(create_request(conv2, sender_id, "Conv2 msg")).await.unwrap();
 
-        let messages = repo.list_messages(conv1, Pagination::default()).await.unwrap();
+        let messages = repo.read_messages(conv1, Pagination::default()).await.unwrap();
 
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].conversation_id, conv1);
@@ -225,7 +162,7 @@ mod tests {
             offset: Some(1),
             limit: None,
         };
-        let messages = repo.list_messages(conv_id, pagination).await.unwrap();
+        let messages = repo.read_messages(conv_id, pagination).await.unwrap();
 
         assert_eq!(messages.len(), 2);
     }
@@ -243,7 +180,7 @@ mod tests {
             offset: None,
             limit: Some(2),
         };
-        let messages = repo.list_messages(conv_id, pagination).await.unwrap();
+        let messages = repo.read_messages(conv_id, pagination).await.unwrap();
 
         assert_eq!(messages.len(), 2);
     }
@@ -253,76 +190,8 @@ mod tests {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
 
-        let messages = repo.list_messages(conv_id, Pagination::default()).await.unwrap();
+        let messages = repo.read_messages(conv_id, Pagination::default()).await.unwrap();
 
         assert!(messages.is_empty());
-    }
-
-    #[tokio::test]
-    async fn update_message_updates_content() {
-        let repo = InMemoryRepository::new();
-        let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Original");
-        let created = repo.create_message(request).await.unwrap();
-
-        let update = UpdateMessageRequest {
-            content: Some("Updated content".to_string()),
-        };
-        let updated = repo.update_message(created.id, update).await.unwrap().unwrap();
-
-        assert_eq!(updated.content, "Updated content");
-    }
-
-    #[tokio::test]
-    async fn update_message_sets_updated_at() {
-        let repo = InMemoryRepository::new();
-        let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Original");
-        let created = repo.create_message(request).await.unwrap();
-        assert!(created.updated_at.is_none());
-
-        let before = Utc::now();
-        let update = UpdateMessageRequest {
-            content: Some("Updated".to_string()),
-        };
-        let updated = repo.update_message(created.id, update).await.unwrap().unwrap();
-        let after = Utc::now();
-
-        assert!(updated.updated_at.is_some());
-        let updated_at = updated.updated_at.unwrap();
-        assert!(updated_at >= before && updated_at <= after);
-    }
-
-    #[tokio::test]
-    async fn update_message_returns_none_for_nonexistent() {
-        let repo = InMemoryRepository::new();
-        let random_id = Uuid::now_v7();
-
-        let update = UpdateMessageRequest {
-            content: Some("Content".to_string()),
-        };
-        let result = repo.update_message(random_id, update).await.unwrap();
-
-        assert!(result.is_none());
-    }
-
-    #[tokio::test]
-    async fn delete_message_removes_message() {
-        let repo = InMemoryRepository::new();
-        let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "To delete");
-        let created = repo.create_message(request).await.unwrap();
-
-        repo.delete_message(created.id).await.unwrap();
-
-        let read = repo.read_message(created.id).await.unwrap();
-        assert!(read.is_none());
-    }
-
-    #[tokio::test]
-    async fn delete_message_succeeds_for_nonexistent() {
-        let repo = InMemoryRepository::new();
-        let random_id = Uuid::now_v7();
-
-        let result = repo.delete_message(random_id).await;
-
-        assert!(result.is_ok());
     }
 }
