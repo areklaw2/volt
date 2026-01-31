@@ -35,5 +35,5 @@ Volt is a full-stack real-time chat application with a React frontend and a Rust
 - **Repository pattern** — Trait-based abstractions with database and in-memory implementations
 - **Dependency injection** — Axum state extractors for clean handler signatures
 - **WebSocket management** — Per-conversation broadcast channels with connection fan-out
-- **Compile-time SQL** — SQLx macros verify queries against the database schema at build time
+- **Compile-time SQL** — SQLx macros verify queries against the database schema at build time (WIP)
 - **Custom error types** — Automatic HTTP status code mapping via `IntoResponse` implementations
