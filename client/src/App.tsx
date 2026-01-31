@@ -8,14 +8,14 @@ import {
   messagesByConversation,
   currentUser,
 } from '@/data/dummy';
-import type { Message, ConversationWithMeta } from '@/types';
+import type { Message, Conversation } from '@/types';
 import { MessageSquare, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUser } from '@clerk/react-router';
 
-function getConversationName(conv: ConversationWithMeta): string {
-  if (conv.title) return conv.title;
-  const other = conv.participants.find((p) => p.id !== currentUser.id);
+function getConversationName(conv: Conversation): string {
+  if (conv.name) return conv.name;
+  const other = conv.participants.find((p) => p.user_id !== currentUser.id);
   return other?.display_name ?? 'Unknown';
 }
 

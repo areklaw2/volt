@@ -1,8 +1,8 @@
-import type { ConversationWithMeta } from "@/types";
-import { ConversationItem } from "./ConversationItem";
+import type { Conversation } from '@/types';
+import { ConversationItem } from './ConversationItem';
 
 interface ConversationListProps {
-  conversations: ConversationWithMeta[];
+  conversations: Conversation[];
   activeId: string | null;
   onSelect: (id: string) => void;
 }

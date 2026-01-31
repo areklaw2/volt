@@ -2,7 +2,7 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreateUserRequest {
-    pub id: Option<String>,
+    pub id: String,
     pub username: String,
     pub display_name: String,
 }

@@ -9,7 +9,7 @@ pub struct UpdateUserConversationRequest {
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ParticipantResponse {
-    pub id: String,
+    pub user_id: String,
     pub username: String,
     pub display_name: String,
     pub joined_at: Option<DateTime<Utc>>,

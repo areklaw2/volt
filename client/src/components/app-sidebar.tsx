@@ -30,12 +30,13 @@ export function AppSidebar({
 
   const filtered = React.useMemo(() => {
     if (!search.trim()) return dummyConversations;
+
     const q = search.toLowerCase();
     return dummyConversations.filter((conv) => {
       const name =
-        conv.title ??
+        conv.name ??
         conv.participants
-          .filter((p) => p.id !== currentUser.id)
+          .filter((p) => p.user_id !== currentUser.id)
           .map((p) => p.display_name)
           .join(', ');
       return name.toLowerCase().includes(q);

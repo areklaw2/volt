@@ -27,8 +27,8 @@ pub struct ConversationResponse {
     pub id: Uuid,
     pub conversation_type: ConversationType,
     pub name: Option<String>,
-    pub created_at: DateTime<Utc>,
     pub participants: Vec<ParticipantResponse>,
+    pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
 
@@ -40,7 +40,7 @@ impl From<ConversationAggregate> for ConversationResponse {
             .into_iter()
             .filter_map(|p| {
                 users_map.get(&p.user_id).map(|user| ParticipantResponse {
-                    id: user.id.clone(),
+                    user_id: user.id.clone(),
                     username: user.username.clone(),
                     display_name: user.display_name.clone(),
                     joined_at: p.joined_at,

@@ -1,13 +1,13 @@
-import type { User, Message, ConversationWithMeta } from '@/types';
+import type { Conversation, Message, Participant } from '@/types';
 
-export const currentUser: User = {
+export const currentUser = {
   id: 'u-current',
   username: 'you',
   display_name: 'You',
   created_at: '2025-01-01T00:00:00Z',
 };
 
-export const users: User[] = [
+export const users = [
   {
     id: 'u-1',
     username: 'alice',
@@ -44,7 +44,7 @@ const usersById = Object.fromEntries(
   [currentUser, ...users].map((u) => [u.id, u]),
 );
 
-export function getUserById(id: string): User | undefined {
+export function getUserById(id: string) {
   return usersById[id];
 }
 
@@ -54,6 +54,20 @@ function daysAgo(d: number, hours = 0, minutes = 0): string {
   date.setDate(date.getDate() - d);
   date.setHours(hours, minutes, 0, 0);
   return date.toISOString();
+}
+
+function toParticipant(
+  user: { id: string; username: string; display_name: string },
+  joined_at: string,
+  last_read_at: string | null = null,
+): Participant {
+  return {
+    user_id: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    joined_at,
+    last_read_at,
+  };
 }
 
 // --- Messages per conversation ---
@@ -365,45 +379,72 @@ export const messagesByConversation: Record<string, Message[]> = {
   'c-4': conv4Messages,
 };
 
-export const conversations: ConversationWithMeta[] = [
+export function getLastMessage(conversationId: string): Message | undefined {
+  const msgs = messagesByConversation[conversationId];
+  return msgs?.[msgs.length - 1];
+}
+
+export function getUnreadCount(conversationId: string, userId: string): number {
+  const conv = conversations.find((c) => c.id === conversationId);
+  if (!conv) return 0;
+  const participant = conv.participants.find((p) => p.user_id === userId);
+  if (!participant?.last_read_at) return 0;
+  const msgs = messagesByConversation[conversationId] ?? [];
+  return msgs.filter(
+    (m) =>
+      m.sender_id !== userId &&
+      new Date(m.created_at) > new Date(participant.last_read_at!),
+  ).length;
+}
+
+export const conversations: Conversation[] = [
   {
     id: 'c-1',
     conversation_type: 'direct',
-    title: null,
+    name: null,
     created_at: daysAgo(7),
     updated_at: daysAgo(0, 10, 22),
-    participants: [currentUser, users[0]],
-    lastMessage: conv1Messages[conv1Messages.length - 1],
-    unreadCount: 1,
+    participants: [
+      toParticipant(currentUser, daysAgo(7), daysAgo(0, 10, 20)),
+      toParticipant(users[0], daysAgo(7)),
+    ],
   },
   {
     id: 'c-2',
     conversation_type: 'direct',
-    title: null,
+    name: null,
     created_at: daysAgo(5),
     updated_at: daysAgo(2, 20, 15),
-    participants: [currentUser, users[1]],
-    lastMessage: conv2Messages[conv2Messages.length - 1],
-    unreadCount: 0,
+    participants: [
+      toParticipant(currentUser, daysAgo(5), daysAgo(2, 20, 15)),
+      toParticipant(users[1], daysAgo(5)),
+    ],
   },
   {
     id: 'c-3',
     conversation_type: 'group',
-    title: 'Sprint Planning',
+    name: 'Sprint Planning',
     created_at: daysAgo(10),
     updated_at: daysAgo(1, 11, 12),
-    participants: [currentUser, users[0], users[2], users[3]],
-    lastMessage: conv3Messages[conv3Messages.length - 1],
-    unreadCount: 2,
+    participants: [
+      toParticipant(currentUser, daysAgo(10), daysAgo(1, 11, 5)),
+      toParticipant(users[0], daysAgo(10)),
+      toParticipant(users[2], daysAgo(10)),
+      toParticipant(users[3], daysAgo(10)),
+    ],
   },
   {
     id: 'c-4',
     conversation_type: 'group',
-    title: 'Watercooler',
+    name: 'Watercooler',
     created_at: daysAgo(14),
     updated_at: daysAgo(2, 12, 22),
-    participants: [currentUser, users[1], users[2], users[3], users[4]],
-    lastMessage: conv4Messages[conv4Messages.length - 1],
-    unreadCount: 0,
+    participants: [
+      toParticipant(currentUser, daysAgo(14), daysAgo(2, 12, 22)),
+      toParticipant(users[1], daysAgo(14)),
+      toParticipant(users[2], daysAgo(14)),
+      toParticipant(users[3], daysAgo(14)),
+      toParticipant(users[4], daysAgo(14)),
+    ],
   },
 ];

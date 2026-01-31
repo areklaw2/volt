@@ -2,7 +2,6 @@ use anyhow::Ok;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{
     dto::user::{CreateUserRequest, UpdateUserRequest},
@@ -29,7 +28,7 @@ pub trait UserRepository: Send + Sync {
 impl UserRepository for InMemoryRepository {
     async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
         let user = User {
-            id: request.id.unwrap_or_else(|| Uuid::now_v7().to_string()),
+            id: request.id,
             username: request.username,
             display_name: request.display_name,
             created_at: Utc::now(),
@@ -89,11 +88,13 @@ impl UserRepository for DbRepository {
 
 #[cfg(test)]
 mod tests {
+    use uuid::Uuid;
+
     use super::*;
 
     fn create_request(username: &str, display_name: &str) -> CreateUserRequest {
         CreateUserRequest {
-            id: None,
+            id: Uuid::now_v7().into(),
             username: username.to_string(),
             display_name: display_name.to_string(),
         }
@@ -101,7 +102,7 @@ mod tests {
 
     fn create_request_with_id(id: &str, username: &str, display_name: &str) -> CreateUserRequest {
         CreateUserRequest {
-            id: Some(id.to_string()),
+            id: id.to_string(),
             username: username.to_string(),
             display_name: display_name.to_string(),
         }

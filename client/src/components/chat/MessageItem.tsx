@@ -15,7 +15,7 @@ function formatTime(dateStr: string): string {
 }
 
 //TODO: fix dark mode colors
-export function Message({ message, showSenderName = false }: MessageProps) {
+export function MessageItem({ message, showSenderName = false }: MessageProps) {
   const isOwn = message.sender_id === currentUser.id;
   const sender: User | undefined = getUserById(message.sender_id);
   const initials = sender

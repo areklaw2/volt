@@ -1,13 +1,13 @@
-import type { ConversationWithMeta } from "@/types";
-import { currentUser } from "@/data/dummy";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import type { Conversation } from '@/types';
+import { currentUser, getLastMessage, getUnreadCount } from '@/data/dummy';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const AVATAR_COLORS = [
-  "bg-emerald-200 text-emerald-800",
-  "bg-violet-200 text-violet-800",
-  "bg-amber-200 text-amber-800",
-  "bg-sky-200 text-sky-800",
-  "bg-rose-200 text-rose-800",
+  'bg-emerald-200 text-emerald-800',
+  'bg-violet-200 text-violet-800',
+  'bg-amber-200 text-amber-800',
+  'bg-sky-200 text-sky-800',
+  'bg-rose-200 text-rose-800',
 ];
 
 function getAvatarColor(id: string): string {
@@ -16,28 +16,28 @@ function getAvatarColor(id: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function getConversationName(conv: ConversationWithMeta): string {
-  if (conv.title) return conv.title;
-  const other = conv.participants.find((p) => p.id !== currentUser.id);
-  return other?.display_name ?? "Unknown";
+function getConversationName(conv: Conversation): string {
+  if (conv.name) return conv.name;
+  const other = conv.participants.find((p) => p.user_id !== currentUser.id);
+  return other?.display_name ?? 'Unknown';
 }
 
 function getInitials(name: string): string {
   return name
-    .split(" ")
+    .split(' ')
     .map((w) => w[0])
-    .join("")
+    .join('')
     .toUpperCase()
     .slice(0, 2);
 }
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 interface ConversationItemProps {
-  conversation: ConversationWithMeta;
+  conversation: Conversation;
   isActive: boolean;
   onClick: () => void;
 }
@@ -49,18 +49,23 @@ export function ConversationItem({
 }: ConversationItemProps) {
   const name = getConversationName(conversation);
   const initials = getInitials(name);
-  const lastMsg = conversation.lastMessage;
+  const lastMsg = getLastMessage(conversation.id);
+  const unreadCount = getUnreadCount(conversation.id, currentUser.id);
   const isOwnLastMsg = lastMsg?.sender_id === currentUser.id;
 
   return (
     <button
       onClick={onClick}
       className={`flex w-full items-center gap-3 border-b border-border/50 px-3 py-3 text-left text-sm transition-colors hover:bg-sidebar-accent ${
-        isActive ? "bg-sidebar-accent" : ""
+        isActive ? 'bg-sidebar-accent' : ''
       }`}
     >
-      <Avatar className={`h-11 w-11 shrink-0 ${getAvatarColor(conversation.id)}`}>
-        <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(conversation.id)}`}>
+      <Avatar
+        className={`h-11 w-11 shrink-0 ${getAvatarColor(conversation.id)}`}
+      >
+        <AvatarFallback
+          className={`text-xs font-semibold ${getAvatarColor(conversation.id)}`}
+        >
           {initials}
         </AvatarFallback>
       </Avatar>
@@ -80,9 +85,9 @@ export function ConversationItem({
           </p>
         )}
       </div>
-      {conversation.unreadCount > 0 && (
+      {unreadCount > 0 && (
         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
-          {conversation.unreadCount}
+          {unreadCount}
         </span>
       )}
     </button>

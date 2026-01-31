@@ -80,8 +80,14 @@ impl ConversationRepository for InMemoryRepository {
             let key = (user.id.clone(), conversation.id);
             user_conversations_repo.insert(key, participant.clone());
 
-            user_to_conversations_index.entry(user.id.clone()).or_default().push(conversation.id);
-            conversation_to_users_index.entry(conversation.id).or_default().push(user.id.clone());
+            user_to_conversations_index
+                .entry(user.id.clone())
+                .or_default()
+                .push(conversation.id);
+            conversation_to_users_index
+                .entry(conversation.id)
+                .or_default()
+                .push(user.id.clone());
 
             user_conversations.push(participant);
         }
@@ -227,6 +233,7 @@ impl ConversationRepository for DbRepository {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use crate::dto::user::CreateUserRequest;
     use crate::repositories::user::UserRepository;
@@ -236,7 +243,7 @@ mod tests {
         for i in 0..count {
             let user = repo
                 .create_user(CreateUserRequest {
-                    id: None,
+                    id: format!("user_23{i}"),
                     username: format!("user{i}"),
                     display_name: format!("User {i}"),
                 })
@@ -475,11 +482,21 @@ mod tests {
         let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
 
         let conv1 = repo
-            .create_conversation(create_request(ConversationType::Group, Some("Group 1"), sender.clone(), usernames.clone()))
+            .create_conversation(create_request(
+                ConversationType::Group,
+                Some("Group 1"),
+                sender.clone(),
+                usernames.clone(),
+            ))
             .await
             .unwrap();
         let conv2 = repo
-            .create_conversation(create_request(ConversationType::Group, Some("Group 2"), sender.clone(), usernames.clone()))
+            .create_conversation(create_request(
+                ConversationType::Group,
+                Some("Group 2"),
+                sender.clone(),
+                usernames.clone(),
+            ))
             .await
             .unwrap();
 
