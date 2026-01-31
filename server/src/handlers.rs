@@ -25,7 +25,7 @@ use crate::{
             update_conversation,
         },
         messages::query_messages,
-        user::{create_user, get_user},
+        user::{create_user, delete_user, get_user, update_user},
     },
 };
 
@@ -55,24 +55,28 @@ pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
     let clerk_config = ClerkConfiguration::new(None, None, Some(config.clerk_secret_key.expose_secret().to_string()), None);
     let clerk = Clerk::new(clerk_config);
 
-fn user_routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/user", post(create_user))
-        .route("/user/{id}", get(get_user))
-}
+    fn user_routes() -> Router<Arc<AppState>> {
+        Router::new()
+            .route("/user", post(create_user))
+            .route("/user/{id}", get(get_user).patch(update_user).delete(delete_user))
+    }
 
-    let http_routes = Router::new().merge(conversation_routes()).merge(message_routes()).merge(user_routes()).layer(
-        ServiceBuilder::new()
-            .layer(HandleErrorLayer::new(|error: BoxError| async move {
-                if error.is::<tower::timeout::error::Elapsed>() {
-                    Ok(StatusCode::REQUEST_TIMEOUT)
-                } else {
-                    Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Unhandled internal error: {error}")))
-                }
-            }))
-            .timeout(Duration::from_secs(100))
-            .into_inner(),
-    );
+    let http_routes = Router::new()
+        .merge(conversation_routes())
+        .merge(message_routes())
+        .merge(user_routes())
+        .layer(
+            ServiceBuilder::new()
+                .layer(HandleErrorLayer::new(|error: BoxError| async move {
+                    if error.is::<tower::timeout::error::Elapsed>() {
+                        Ok(StatusCode::REQUEST_TIMEOUT)
+                    } else {
+                        Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Unhandled internal error: {error}")))
+                    }
+                }))
+                .timeout(Duration::from_secs(100))
+                .into_inner(),
+        );
 
     let api_routes = Router::new().merge(http_routes).merge(chat_routes());
 

@@ -9,7 +9,7 @@ use axum::{
 
 use crate::{
     AppState,
-    dto::user::CreateUserRequest,
+    dto::user::{CreateUserRequest, UpdateUserRequest},
     errors::{AppError, OptionExt},
 };
 
@@ -24,4 +24,21 @@ pub async fn create_user(
 pub async fn get_user(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Result<impl IntoResponse, AppError> {
     let user = state.repository.read_user(id).await?.ok_or_not_found("User not found")?;
     Ok(Json(user))
+}
+
+pub async fn update_user(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(request): Json<UpdateUserRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    let user = state.repository.update_user(id, request).await?.ok_or_not_found("User not found")?;
+    Ok(Json(user))
+}
+
+pub async fn delete_user(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    state.repository.delete_user(id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
