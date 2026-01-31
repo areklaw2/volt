@@ -1,4 +1,3 @@
-import * as React from 'react';
 import { X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -6,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import type { User, Conversation } from '@/types';
 import { fetchUsers, createConversation } from '@/services/api';
+import { useEffect, useMemo, useState } from 'react';
 
 interface NewConversationDialogProps {
   currentUserId: string;
@@ -14,14 +14,14 @@ interface NewConversationDialogProps {
 }
 
 export function NewConversationDialog({ currentUserId, trigger, onCreate }: NewConversationDialogProps) {
-  const [open, setOpen] = React.useState(false);
-  const [users, setUsers] = React.useState<User[]>([]);
-  const [search, setSearch] = React.useState('');
-  const [selected, setSelected] = React.useState<User[]>([]);
-  const [conversationName, setConversationName] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<User[]>([]);
+  const [conversationName, setConversationName] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!open) return;
     setSearch('');
     setSelected([]);
@@ -32,7 +32,7 @@ export function NewConversationDialog({ currentUserId, trigger, onCreate }: NewC
       .catch(() => setUsers([]));
   }, [open, currentUserId]);
 
-  const filtered = React.useMemo(() => {
+  const filtered = useMemo(() => {
     const selectedIds = new Set(selected.map((u) => u.id));
     const available = users.filter((u) => !selectedIds.has(u.id));
     if (!search.trim()) return available;

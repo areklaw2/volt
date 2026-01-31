@@ -1,14 +1,14 @@
-import { useState, useCallback, useEffect } from "react";
-import { ThemeProvider } from "@/components/theme-provider";
-import { AppLayout } from "@/components/app-layout";
-import { MessageList } from "@/components/chat/MessageList";
-import { MessageInput } from "@/components/chat/MessageInput";
-import { conversations as dummyConversations, messagesByConversation } from "@/data/dummy";
-import type { Message, Conversation } from "@/types";
-import { MessageSquare, Info } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { useUser, useAuth } from "@clerk/react-router";
-import { initApi, createUser } from "@/services/api";
+import { useState, useCallback, useEffect } from 'react';
+import { ThemeProvider } from '@/components/theme-provider';
+import { AppLayout } from '@/components/app-layout';
+import { MessageList } from '@/components/chat/MessageList';
+import { MessageInput } from '@/components/chat/MessageInput';
+import { conversations as dummyConversations, messagesByConversation } from '@/data/dummy';
+import type { Message, Conversation } from '@/types';
+import { MessageSquare, Info } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useUser, useAuth } from '@clerk/react-router';
+import { initApi, createUser, fetchConversations } from '@/services/api';
 
 function App() {
   const { user } = useUser();
@@ -23,7 +23,6 @@ function App() {
 
     const username = user.username || user.primaryEmailAddress?.emailAddress || user.id;
     const displayName = user.fullName || username;
-
     createUser(user.id, username, displayName).catch(() => {});
   }, [user]);
 
@@ -34,10 +33,16 @@ function App() {
   const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
   const messages = currentConversationId ? (localMessages[currentConversationId] ?? []) : [];
 
-  const userId = user?.id || "";
+  const userId = user?.id || '';
+  useEffect(() => {
+    fetchConversations(userId)
+      .then(setConversations)
+      .catch(() => setConversations([]));
+  }, [userId]);
+
   const handleSend = useCallback(
     (content: string) => {
-      if (!currentConversationId || userId !== "") {
+      if (!currentConversationId || userId !== '') {
         return;
       }
 
@@ -65,7 +70,7 @@ function App() {
   function getConversationName(conv: Conversation): string {
     if (conv.name) return conv.name;
     const other = conv.participants.find((p) => p.user_id !== userId);
-    return other?.display_name ?? "Unknown";
+    return other?.display_name ?? 'Unknown';
   }
 
   return (
@@ -82,7 +87,7 @@ function App() {
             <header className="flex items-center justify-between border-b px-4 py-3">
               <div>
                 <h1 className="text-lg font-semibold">{getConversationName(currentConversation)}</h1>
-                {currentConversation.conversation_type === "group" ? (
+                {currentConversation.conversation_type === 'group' ? (
                   <span className="text-xs text-muted-foreground">
                     {currentConversation.participants.length} members
                   </span>
@@ -94,7 +99,7 @@ function App() {
                 <Info className="h-5 w-5" />
               </Button>
             </header>
-            <MessageList messages={messages} isGroup={currentConversation.conversation_type === "group"} />
+            <MessageList messages={messages} isGroup={currentConversation.conversation_type === 'group'} />
             <MessageInput onSend={handleSend} />
           </div>
         ) : (

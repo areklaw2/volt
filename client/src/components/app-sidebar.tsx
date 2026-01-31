@@ -14,7 +14,6 @@ import {
   SidebarGroupContent,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { currentUser } from "@/data/dummy";
 import type { Conversation } from "@/types";
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
@@ -43,12 +42,12 @@ export function AppSidebar({
       const name =
         conv.name ??
         conv.participants
-          .filter((p) => p.user_id !== currentUser.id)
+          .filter((p) => p.user_id !== currentUserId)
           .map((p) => p.display_name)
           .join(", ");
       return name.toLowerCase().includes(q);
     });
-  }, [search, conversationsProp]);
+  }, [search, conversationsProp, currentUserId]);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -83,6 +82,7 @@ export function AppSidebar({
           <SidebarGroupContent>
             <ConversationList
               conversations={filtered}
+              currentUserId={currentUserId}
               activeId={activeConversationId}
               onSelect={onSelectConversation}
             />

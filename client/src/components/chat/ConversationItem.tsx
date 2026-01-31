@@ -1,5 +1,5 @@
 import type { Conversation } from '@/types';
-import { currentUser, getLastMessage, getUnreadCount } from '@/data/dummy';
+import { getLastMessage, getUnreadCount } from '@/data/dummy';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const AVATAR_COLORS = [
@@ -16,9 +16,9 @@ function getAvatarColor(id: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function getConversationName(conv: Conversation): string {
+function getConversationName(conv: Conversation, currentUserId: string): string {
   if (conv.name) return conv.name;
-  const other = conv.participants.find((p) => p.user_id !== currentUser.id);
+  const other = conv.participants.find((p) => p.user_id !== currentUserId);
   return other?.display_name ?? 'Unknown';
 }
 
@@ -38,20 +38,22 @@ function formatTime(dateStr: string): string {
 
 interface ConversationItemProps {
   conversation: Conversation;
+  currentUserId: string;
   isActive: boolean;
   onClick: () => void;
 }
 
 export function ConversationItem({
   conversation,
+  currentUserId,
   isActive,
   onClick,
 }: ConversationItemProps) {
-  const name = getConversationName(conversation);
+  const name = getConversationName(conversation, currentUserId);
   const initials = getInitials(name);
   const lastMsg = getLastMessage(conversation.id);
-  const unreadCount = getUnreadCount(conversation.id, currentUser.id);
-  const isOwnLastMsg = lastMsg?.sender_id === currentUser.id;
+  const unreadCount = getUnreadCount(conversation.id, currentUserId);
+  const isOwnLastMsg = lastMsg?.sender_id === currentUserId;
 
   return (
     <button

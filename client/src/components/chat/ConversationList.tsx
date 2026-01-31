@@ -3,12 +3,14 @@ import { ConversationItem } from './ConversationItem';
 
 interface ConversationListProps {
   conversations: Conversation[];
+  currentUserId: string;
   activeId: string | null;
   onSelect: (id: string) => void;
 }
 
 export function ConversationList({
   conversations,
+  currentUserId,
   activeId,
   onSelect,
 }: ConversationListProps) {
@@ -26,6 +28,7 @@ export function ConversationList({
         <ConversationItem
           key={conv.id}
           conversation={conv}
+          currentUserId={currentUserId}
           isActive={conv.id === activeId}
           onClick={() => onSelect(conv.id)}
         />
