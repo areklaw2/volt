@@ -14,7 +14,6 @@ pub struct User {
     pub id: Uuid,
     pub username: String,
     pub display_name: String,
-    pub avatar_url: String,
     pub created_at: DateTime<Utc>,
 }
 
@@ -34,12 +33,14 @@ impl UserRepository for InMemoryRepository {
             id: Uuid::now_v7(),
             username: request.username,
             display_name: request.display_name,
-            avatar_url: request.avatar_url,
             created_at: Utc::now(),
         };
 
         self.user_repos.write().await.insert(user.id, user.clone());
-        self.username_to_user_index.write().await.insert(user.username.clone(), user.clone());
+        self.username_to_user_index
+            .write()
+            .await
+            .insert(user.username.clone(), user.clone());
 
         Ok(user)
     }
@@ -61,9 +62,6 @@ impl UserRepository for InMemoryRepository {
 
         if let Some(display_name) = request.display_name {
             user.display_name = display_name;
-        }
-        if let Some(avatar_url) = request.avatar_url {
-            user.avatar_url = avatar_url;
         }
 
         Ok(Some(user.clone()))
@@ -103,31 +101,29 @@ impl UserRepository for DbRepository {
 mod tests {
     use super::*;
 
-    fn create_request(username: &str, display_name: &str, avatar_url: &str) -> CreateUserRequest {
+    fn create_request(username: &str, display_name: &str) -> CreateUserRequest {
         CreateUserRequest {
             username: username.to_string(),
             display_name: display_name.to_string(),
-            avatar_url: avatar_url.to_string(),
         }
     }
 
     #[tokio::test]
     async fn create_user_returns_user_with_correct_fields() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice Smith", "https://example.com/alice.png");
+        let request = create_request("alice", "Alice Smith");
 
         let user = repo.create_user(request).await.unwrap();
 
         assert_eq!(user.username, "alice");
         assert_eq!(user.display_name, "Alice Smith");
-        assert_eq!(user.avatar_url, "https://example.com/alice.png");
     }
 
     #[tokio::test]
     async fn create_user_generates_unique_id() {
         let repo = InMemoryRepository::new();
-        let request1 = create_request("alice", "Alice", "https://example.com/a.png");
-        let request2 = create_request("bob", "Bob", "https://example.com/b.png");
+        let request1 = create_request("alice", "Alice");
+        let request2 = create_request("bob", "Bob");
 
         let user1 = repo.create_user(request1).await.unwrap();
         let user2 = repo.create_user(request2).await.unwrap();
@@ -139,7 +135,7 @@ mod tests {
     async fn create_user_sets_created_at_timestamp() {
         let repo = InMemoryRepository::new();
         let before = Utc::now();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
 
         let user = repo.create_user(request).await.unwrap();
 
@@ -150,7 +146,7 @@ mod tests {
     #[tokio::test]
     async fn create_user_persists_user() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
 
         let created = repo.create_user(request).await.unwrap();
         let read = repo.read_user(created.id).await.unwrap();
@@ -162,7 +158,7 @@ mod tests {
     #[tokio::test]
     async fn read_user_returns_existing_user() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice Smith", "https://example.com/a.png");
+        let request = create_request("alice", "Alice Smith");
         let created = repo.create_user(request).await.unwrap();
 
         let user = repo.read_user(created.id).await.unwrap().unwrap();
@@ -185,65 +181,53 @@ mod tests {
     #[tokio::test]
     async fn update_user_updates_display_name_only() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
         let created = repo.create_user(request).await.unwrap();
 
         let update = UpdateUserRequest {
             display_name: Some("Alice Updated".to_string()),
-            avatar_url: None,
         };
         let updated = repo.update_user(created.id, update).await.unwrap().unwrap();
 
         assert_eq!(updated.display_name, "Alice Updated");
-        assert_eq!(updated.avatar_url, "https://example.com/a.png");
     }
 
     #[tokio::test]
     async fn update_user_updates_avatar_url_only() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
         let created = repo.create_user(request).await.unwrap();
 
-        let update = UpdateUserRequest {
-            display_name: None,
-            avatar_url: Some("https://example.com/new.png".to_string()),
-        };
+        let update = UpdateUserRequest { display_name: None };
         let updated = repo.update_user(created.id, update).await.unwrap().unwrap();
 
         assert_eq!(updated.display_name, "Alice");
-        assert_eq!(updated.avatar_url, "https://example.com/new.png");
     }
 
     #[tokio::test]
     async fn update_user_updates_both_fields() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
         let created = repo.create_user(request).await.unwrap();
 
         let update = UpdateUserRequest {
             display_name: Some("Alice New".to_string()),
-            avatar_url: Some("https://example.com/new.png".to_string()),
         };
         let updated = repo.update_user(created.id, update).await.unwrap().unwrap();
 
         assert_eq!(updated.display_name, "Alice New");
-        assert_eq!(updated.avatar_url, "https://example.com/new.png");
     }
 
     #[tokio::test]
     async fn update_user_with_all_none_leaves_user_unchanged() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
         let created = repo.create_user(request).await.unwrap();
 
-        let update = UpdateUserRequest {
-            display_name: None,
-            avatar_url: None,
-        };
+        let update = UpdateUserRequest { display_name: None };
         let updated = repo.update_user(created.id, update).await.unwrap().unwrap();
 
         assert_eq!(updated.display_name, "Alice");
-        assert_eq!(updated.avatar_url, "https://example.com/a.png");
     }
 
     #[tokio::test]
@@ -253,7 +237,6 @@ mod tests {
 
         let update = UpdateUserRequest {
             display_name: Some("New Name".to_string()),
-            avatar_url: None,
         };
         let result = repo.update_user(random_id, update).await.unwrap();
 
@@ -263,7 +246,7 @@ mod tests {
     #[tokio::test]
     async fn delete_user_removes_existing_user() {
         let repo = InMemoryRepository::new();
-        let request = create_request("alice", "Alice", "https://example.com/a.png");
+        let request = create_request("alice", "Alice");
         let created = repo.create_user(request).await.unwrap();
 
         repo.delete_user(created.id).await.unwrap();

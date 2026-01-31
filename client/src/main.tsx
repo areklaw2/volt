@@ -9,8 +9,8 @@ import {
   SignedOut,
 } from '@clerk/react-router';
 import { BrowserRouter, Routes, Route } from 'react-router';
-import SignInPage from './pages/sign-in';
-import SignUpPage from './pages/sign-up';
+import SignInPage from './components/sign-in';
+import SignUpPage from './components/sign-up';
 import App from './App';
 
 const PUBLISHABLE_KEY = env.CLERK_PUBLISHABLE_KEY;
@@ -25,8 +25,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         publishableKey={PUBLISHABLE_KEY}
         signInUrl="/sign-in"
         signUpUrl="/sign-up"
-        afterSignInUrl="/"
-        afterSignUpUrl="/"
       >
         <Routes>
           <Route path="/sign-in/*" element={<SignInPage />} />

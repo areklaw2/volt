@@ -43,7 +43,6 @@ impl From<ConversationAggregate> for ConversationResponse {
                     id: user.id,
                     username: user.username.clone(),
                     display_name: user.display_name.clone(),
-                    avatar_url: user.avatar_url.clone(),
                     joined_at: p.joined_at,
                     last_read_at: p.last_read_at,
                 })

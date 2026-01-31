@@ -13,7 +13,6 @@ pub struct ParticipantResponse {
     pub id: Uuid,
     pub username: String,
     pub display_name: String,
-    pub avatar_url: String,
     pub joined_at: Option<DateTime<Utc>>,
     pub last_read_at: Option<DateTime<Utc>>,
 }

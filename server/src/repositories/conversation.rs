@@ -238,7 +238,6 @@ mod tests {
                 .create_user(CreateUserRequest {
                     username: format!("user{i}"),
                     display_name: format!("User {i}"),
-                    avatar_url: format!("https://example.com/{i}.png"),
                 })
                 .await
                 .unwrap();
