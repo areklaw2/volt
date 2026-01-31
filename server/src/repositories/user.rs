@@ -39,6 +39,7 @@ impl UserRepository for InMemoryRepository {
         };
 
         self.user_repos.write().await.insert(user.id, user.clone());
+        self.username_to_user_index.write().await.insert(user.username.clone(), user.clone());
 
         Ok(user)
     }

@@ -34,9 +34,10 @@ pub struct InMemoryRepository {
     conversations_repo: RwLock<HashMap<Uuid, Conversation>>,
     messages_repo: RwLock<HashMap<Uuid, Message>>,
     user_repos: RwLock<HashMap<Uuid, User>>,
+    username_to_user_index: RwLock<HashMap<String, User>>,
     user_conversations_repo: RwLock<HashMap<(Uuid, Uuid), UserConversation>>,
-    user_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
-    conversation_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
+    user_to_conversations_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
+    conversation_to_users_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
 }
 
 impl Repository for InMemoryRepository {}
@@ -47,9 +48,10 @@ impl InMemoryRepository {
             conversations_repo: RwLock::default(),
             messages_repo: RwLock::default(),
             user_repos: RwLock::default(),
+            username_to_user_index: RwLock::default(),
             user_conversations_repo: RwLock::default(),
-            user_index: RwLock::default(),
-            conversation_index: RwLock::default(),
+            user_to_conversations_index: RwLock::default(),
+            conversation_to_users_index: RwLock::default(),
         }
     }
 }

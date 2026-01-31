@@ -33,8 +33,8 @@ pub trait UserConversationRepository: Send + Sync {
 impl UserConversationRepository for InMemoryRepository {
     async fn create_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error> {
         let mut user_conversations = self.user_conversations_repo.write().await;
-        let mut conversation_index = self.conversation_index.write().await;
-        let mut user_index = self.user_index.write().await;
+        let mut conversation_to_users_index = self.conversation_to_users_index.write().await;
+        let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
 
         let now = Some(Utc::now());
         let user_conversation = UserConversation {
@@ -47,8 +47,8 @@ impl UserConversationRepository for InMemoryRepository {
         let key = (user_id, conversation_id);
         user_conversations.insert(key, user_conversation.clone());
 
-        user_index.entry(user_id).or_default().push(conversation_id);
-        conversation_index.entry(conversation_id).or_default().push(user_id);
+        user_to_conversations_index.entry(user_id).or_default().push(conversation_id);
+        conversation_to_users_index.entry(conversation_id).or_default().push(user_id);
 
         Ok(user_conversation)
     }
@@ -82,13 +82,13 @@ impl UserConversationRepository for InMemoryRepository {
         let key = (user_id, conversation_id);
         self.user_conversations_repo.write().await.remove(&key);
 
-        let mut user_index = self.user_index.write().await;
-        if let Some(conversation_ids) = user_index.get_mut(&user_id) {
+        let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
+        if let Some(conversation_ids) = user_to_conversations_index.get_mut(&user_id) {
             conversation_ids.retain(|id| *id != conversation_id);
         }
 
-        let mut conversation_index = self.conversation_index.write().await;
-        if let Some(user_ids) = conversation_index.get_mut(&conversation_id) {
+        let mut conversation_to_users_index = self.conversation_to_users_index.write().await;
+        if let Some(user_ids) = conversation_to_users_index.get_mut(&conversation_id) {
             user_ids.retain(|id| *id != user_id);
         }
 

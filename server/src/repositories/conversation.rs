@@ -54,29 +54,34 @@ impl ConversationRepository for InMemoryRepository {
         self.conversations_repo.write().await.insert(conversation.id, conversation.clone());
 
         let mut user_conversations_repo = self.user_conversations_repo.write().await;
-        let mut conversation_index = self.conversation_index.write().await;
-        let mut user_index = self.user_index.write().await;
+        let mut conversation_to_users_index = self.conversation_to_users_index.write().await;
+        let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
+        let username_to_user_index = self.username_to_user_index.read().await;
 
         let mut user_conversations = Vec::new();
-        for user_id in request.participants {
+        for user_name in request.participants {
+            let Some(user) = username_to_user_index.get(&user_name) else {
+                continue;
+            };
+
             let mut participant = UserConversation {
-                user_id: user_id,
+                user_id: user.id,
                 conversation_id: conversation.id,
                 joined_at: None,
                 last_read_at: None,
             };
 
-            if request.sender_id == user_id {
+            if request.sender_id == user.id {
                 let now = Some(Utc::now());
                 participant.joined_at = now;
                 participant.last_read_at = now;
             }
 
-            let key = (user_id, conversation.id);
+            let key = (user.id, conversation.id);
             user_conversations_repo.insert(key, participant.clone());
 
-            user_index.entry(user_id).or_default().push(conversation.id);
-            conversation_index.entry(conversation.id).or_default().push(user_id);
+            user_to_conversations_index.entry(user.id).or_default().push(conversation.id);
+            conversation_to_users_index.entry(conversation.id).or_default().push(user.id);
 
             user_conversations.push(participant);
         }
@@ -101,8 +106,8 @@ impl ConversationRepository for InMemoryRepository {
         };
 
         let user_conversations_repo = self.user_conversations_repo.read().await;
-        let conversation_index = self.conversation_index.read().await;
-        let user_conversations = match conversation_index.get(&conversation.id) {
+        let conversation_to_users_index = self.conversation_to_users_index.read().await;
+        let user_conversations = match conversation_to_users_index.get(&conversation.id) {
             Some(user_ids) => user_ids
                 .iter()
                 .filter_map(|user_id| user_conversations_repo.get(&(*user_id, conversation.id)).cloned())
@@ -132,10 +137,10 @@ impl ConversationRepository for InMemoryRepository {
         };
 
         let user_conversations_repo = self.user_conversations_repo.read().await;
-        let user_index = self.user_index.read().await;
+        let user_to_conversations_index = self.user_to_conversations_index.read().await;
         let conversations_repo = self.conversations_repo.read().await;
 
-        let Some(conversation_ids) = user_index.get(&user_id) else {
+        let Some(conversation_ids) = user_to_conversations_index.get(&user_id) else {
             return Ok(Vec::new());
         };
 
@@ -178,15 +183,15 @@ impl ConversationRepository for InMemoryRepository {
             return Ok(());
         };
 
-        let mut conversation_index = self.conversation_index.write().await;
-        let user_ids = conversation_index.remove(&conversation.id).unwrap_or_default();
+        let mut conversation_to_users_index = self.conversation_to_users_index.write().await;
+        let user_ids = conversation_to_users_index.remove(&conversation.id).unwrap_or_default();
 
         let mut user_conversations_repo = self.user_conversations_repo.write().await;
-        let mut user_index = self.user_index.write().await;
+        let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
 
         for user_id in user_ids {
             user_conversations_repo.remove(&(user_id, conversation.id));
-            if let Some(conversation_ids) = user_index.get_mut(&user_id) {
+            if let Some(conversation_ids) = user_to_conversations_index.get_mut(&user_id) {
                 conversation_ids.retain(|cid| *cid != conversation.id);
             }
         }
@@ -246,7 +251,7 @@ mod tests {
         conversation_type: ConversationType,
         name: Option<&str>,
         sender_id: Uuid,
-        participants: Vec<Uuid>,
+        participants: Vec<String>,
     ) -> CreateConversationRequest {
         CreateConversationRequest {
             conversation_type,
@@ -261,8 +266,8 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
         let sender = users[0].id;
-        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
-        let request = create_request(ConversationType::Group, Some("Test Group"), sender, participant_ids);
+        let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
+        let request = create_request(ConversationType::Group, Some("Test Group"), sender, usernames);
 
         let agg = repo.create_conversation(request).await.unwrap();
 
@@ -277,8 +282,8 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
         let sender = users[0].id;
-        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
-        let request = create_request(ConversationType::Direct, None, sender, participant_ids);
+        let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
+        let request = create_request(ConversationType::Direct, None, sender, usernames);
 
         let agg = repo.create_conversation(request).await.unwrap();
 
@@ -296,8 +301,9 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
         let uid = users[0].id;
-        let request1 = create_request(ConversationType::Direct, None, uid, vec![uid]);
-        let request2 = create_request(ConversationType::Group, Some("Group"), uid, vec![uid]);
+        let username = &users[0].username;
+        let request1 = create_request(ConversationType::Direct, None, uid, vec![username.into()]);
+        let request2 = create_request(ConversationType::Group, Some("Group"), uid, vec![username.into()]);
 
         let conv1 = repo.create_conversation(request1).await.unwrap();
         let conv2 = repo.create_conversation(request2).await.unwrap();
@@ -310,8 +316,9 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
         let uid = users[0].id;
+        let username = &users[0].username;
         let before = Utc::now();
-        let request = create_request(ConversationType::Direct, None, uid, vec![uid]);
+        let request = create_request(ConversationType::Direct, None, uid, vec![username.into()]);
 
         let agg = repo.create_conversation(request).await.unwrap();
 
@@ -324,7 +331,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
         let uid = users[0].id;
-        let request = create_request(ConversationType::Direct, None, uid, vec![uid]);
+        let request = create_request(ConversationType::Direct, None, uid, vec![users[0].username.clone()]);
 
         let agg = repo.create_conversation(request).await.unwrap();
 
@@ -337,7 +344,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
         let uid = users[0].id;
-        let request = create_request(ConversationType::Group, Some("My Group Chat"), uid, vec![uid]);
+        let request = create_request(ConversationType::Group, Some("My Group Chat"), uid, vec![users[0].username.clone()]);
 
         let agg = repo.create_conversation(request).await.unwrap();
 
@@ -350,8 +357,8 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 3).await;
         let sender = users[0].id;
-        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
-        let request = create_request(ConversationType::Group, Some("Test"), sender, participant_ids.clone());
+        let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
+        let request = create_request(ConversationType::Group, Some("Test"), sender, usernames.clone());
         let created = repo.create_conversation(request).await.unwrap();
 
         let read = repo.read_conversation(created.conversation.id).await.unwrap().unwrap();
@@ -360,9 +367,9 @@ mod tests {
         assert_eq!(read.conversation.name, Some("Test".to_string()));
         assert_eq!(read.user_conversations.len(), 3);
         assert_eq!(read.users.len(), 3);
-        for uid in &participant_ids {
-            assert!(read.user_conversations.iter().any(|p| p.user_id == *uid));
-            assert!(read.users.iter().any(|u| u.id == *uid));
+        for user in users {
+            assert!(read.user_conversations.iter().any(|p| p.user_id == user.id));
+            assert!(read.users.iter().any(|u| u.id == user.id));
         }
     }
 
@@ -381,7 +388,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
         let uid = users[0].id;
-        let request = create_request(ConversationType::Group, Some("Original"), uid, vec![uid]);
+        let request = create_request(ConversationType::Group, Some("Original"), uid, vec![users[0].username.clone()]);
         let created = repo.create_conversation(request).await.unwrap();
 
         let update = UpdateConversationRequest {
@@ -397,7 +404,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
         let uid = users[0].id;
-        let request = create_request(ConversationType::Group, Some("Test"), uid, vec![uid]);
+        let request = create_request(ConversationType::Group, Some("Test"), uid, vec![users[0].username.clone()]);
         let created = repo.create_conversation(request).await.unwrap();
         assert!(created.conversation.updated_at.is_none());
 
@@ -431,8 +438,9 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
         let sender = users[0].id;
+        let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
         let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
-        let request = create_request(ConversationType::Direct, None, sender, participant_ids.clone());
+        let request = create_request(ConversationType::Direct, None, sender, usernames.clone());
         let created = repo.create_conversation(request).await.unwrap();
         let conv_id = created.conversation.id;
 
@@ -441,22 +449,20 @@ mod tests {
         let read = repo.read_conversation(conv_id).await.unwrap();
         assert!(read.is_none());
 
-        // Verify user_conversations were cleaned up
         let user_conversations_repo = repo.user_conversations_repo.read().await;
         for uid in &participant_ids {
             assert!(user_conversations_repo.get(&(*uid, conv_id)).is_none());
         }
         drop(user_conversations_repo);
 
-        // Verify conversation_index was cleaned up
-        let conversation_index = repo.conversation_index.read().await;
-        assert!(conversation_index.get(&conv_id).is_none());
-        drop(conversation_index);
+        let conversation_to_users_index = repo.conversation_to_users_index.read().await;
+        assert!(conversation_to_users_index.get(&conv_id).is_none());
+        drop(conversation_to_users_index);
 
-        // Verify user_index entries were cleaned up
-        let user_index = repo.user_index.read().await;
+        // Verify user_to_conversations_index entries were cleaned up
+        let user_to_conversations_index = repo.user_to_conversations_index.read().await;
         for uid in &participant_ids {
-            if let Some(conv_ids) = user_index.get(uid) {
+            if let Some(conv_ids) = user_to_conversations_index.get(uid) {
                 assert!(!conv_ids.contains(&conv_id));
             }
         }
@@ -467,24 +473,14 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
         let sender = users[0].id;
-        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+        let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
 
         let conv1 = repo
-            .create_conversation(create_request(
-                ConversationType::Group,
-                Some("Group 1"),
-                sender,
-                participant_ids.clone(),
-            ))
+            .create_conversation(create_request(ConversationType::Group, Some("Group 1"), sender, usernames.clone()))
             .await
             .unwrap();
         let conv2 = repo
-            .create_conversation(create_request(
-                ConversationType::Group,
-                Some("Group 2"),
-                sender,
-                participant_ids.clone(),
-            ))
+            .create_conversation(create_request(ConversationType::Group, Some("Group 2"), sender, usernames.clone()))
             .await
             .unwrap();
 
@@ -523,9 +519,14 @@ mod tests {
         let user1 = users[0].id;
         let user2 = users[1].id;
 
-        repo.create_conversation(create_request(ConversationType::Direct, None, user1, vec![user1]))
-            .await
-            .unwrap();
+        repo.create_conversation(create_request(
+            ConversationType::Direct,
+            None,
+            user1,
+            vec![users[0].username.clone()],
+        ))
+        .await
+        .unwrap();
 
         let result = repo.read_conversations_by_user(user2).await.unwrap();
 

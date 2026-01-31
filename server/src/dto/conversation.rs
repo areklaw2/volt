@@ -13,7 +13,7 @@ use crate::{
 pub struct CreateConversationRequest {
     pub conversation_type: ConversationType,
     pub sender_id: Uuid,
-    pub participants: Vec<Uuid>,
+    pub participants: Vec<String>,
     pub name: Option<String>,
 }
 
