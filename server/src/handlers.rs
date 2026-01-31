@@ -25,7 +25,7 @@ use crate::{
             update_conversation,
         },
         messages::query_messages,
-        user::{create_user, delete_user, get_user, update_user},
+        user::{create_user, delete_user, get_user, get_users, update_user},
     },
 };
 
@@ -58,6 +58,7 @@ pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
     fn user_routes() -> Router<Arc<AppState>> {
         Router::new()
             .route("/user", post(create_user))
+            .route("/users", get(get_users))
             .route("/user/{id}", get(get_user).patch(update_user).delete(delete_user))
     }
 
@@ -82,12 +83,12 @@ pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
 
     Router::new()
         .nest("/api/v1", api_routes)
+        .layer(ClerkLayer::new(MemoryCacheJwksProvider::new(clerk), None, true))
         .layer(
             CorsLayer::new()
-                .allow_headers([http::header::CONTENT_TYPE])
+                .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION])
                 .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
                 .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::PUT, Method::DELETE]),
         )
-        .layer(ClerkLayer::new(MemoryCacheJwksProvider::new(clerk), None, true))
         .layer(TraceLayer::new_for_http())
 }

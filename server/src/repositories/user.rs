@@ -20,6 +20,7 @@ pub struct User {
 pub trait UserRepository: Send + Sync {
     async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error>;
     async fn read_user(&self, user_id: String) -> Result<Option<User>, anyhow::Error>;
+    async fn read_users(&self) -> Result<Vec<User>, anyhow::Error>;
     async fn update_user(&self, user_id: String, request: UpdateUserRequest) -> Result<Option<User>, anyhow::Error>;
     async fn delete_user(&self, user_id: String) -> Result<(), anyhow::Error>;
 }
@@ -45,6 +46,10 @@ impl UserRepository for InMemoryRepository {
 
     async fn read_user(&self, user_id: String) -> Result<Option<User>, anyhow::Error> {
         Ok(self.user_repos.read().await.get(&user_id).cloned())
+    }
+
+    async fn read_users(&self) -> Result<Vec<User>, anyhow::Error> {
+        Ok(self.user_repos.read().await.values().cloned().collect())
     }
 
     async fn update_user(&self, user_id: String, request: UpdateUserRequest) -> Result<Option<User>, anyhow::Error> {
@@ -74,6 +79,10 @@ impl UserRepository for DbRepository {
     }
 
     async fn read_user(&self, user_id: String) -> Result<Option<User>, anyhow::Error> {
+        todo!()
+    }
+
+    async fn read_users(&self) -> Result<Vec<User>, anyhow::Error> {
         todo!()
     }
 

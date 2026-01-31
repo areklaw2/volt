@@ -35,10 +35,12 @@ pub async fn update_user(
     Ok(Json(user))
 }
 
-pub async fn delete_user(
-    State(state): State<Arc<AppState>>,
-    Path(id): Path<String>,
-) -> Result<impl IntoResponse, AppError> {
+pub async fn get_users(State(state): State<Arc<AppState>>) -> Result<impl IntoResponse, AppError> {
+    let users = state.repository.read_users().await?;
+    Ok(Json(users))
+}
+
+pub async fn delete_user(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Result<impl IntoResponse, AppError> {
     state.repository.delete_user(id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

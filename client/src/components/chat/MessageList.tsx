@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import type { Message } from '@/types';
-import { MessageItem } from './MessageItem';
+import { useEffect, useRef } from "react";
+import type { Message } from "@/types";
+import { MessageItem } from "./MessageItem";
 
 interface MessageListProps {
   messages: Message[];
@@ -10,15 +10,13 @@ interface MessageListProps {
 function formatDateSeparator(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
-  const diffDays = Math.floor(
-    (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24),
-  );
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
+  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
   return date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
+    weekday: "long",
+    month: "short",
+    day: "numeric",
   });
 }
 
@@ -26,7 +24,7 @@ export function MessageList({ messages, isGroup = false }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
   // Group messages by date
@@ -53,11 +51,7 @@ export function MessageList({ messages, isGroup = false }: MessageListProps) {
             </div>
             <div className="flex flex-col gap-2">
               {group.messages.map((msg) => (
-                <MessageItem
-                  key={msg.id}
-                  message={msg}
-                  showSenderName={isGroup}
-                />
+                <MessageItem key={msg.id} message={msg} showSenderName={isGroup} />
               ))}
             </div>
           </div>

@@ -1,48 +1,39 @@
-import { useState, useCallback } from 'react';
-import { ThemeProvider } from '@/components/theme-provider';
-import { AppLayout } from '@/components/app-layout';
-import { MessageList } from '@/components/chat/MessageList';
-import { MessageInput } from '@/components/chat/MessageInput';
-import {
-  conversations,
-  messagesByConversation,
-  currentUser,
-} from '@/data/dummy';
-import type { Message, Conversation } from '@/types';
-import { MessageSquare, Info } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useUser } from '@clerk/react-router';
-
-function getConversationName(conv: Conversation): string {
-  if (conv.name) return conv.name;
-  const other = conv.participants.find((p) => p.user_id !== currentUser.id);
-  return other?.display_name ?? 'Unknown';
-}
+import { useState, useCallback } from "react";
+import { ThemeProvider } from "@/components/theme-provider";
+import { AppLayout } from "@/components/app-layout";
+import { MessageList } from "@/components/chat/MessageList";
+import { MessageInput } from "@/components/chat/MessageInput";
+import { conversations as dummyConversations, messagesByConversation } from "@/data/dummy";
+import type { Message, Conversation } from "@/types";
+import { MessageSquare, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useUser, useAuth } from "@clerk/react-router";
+import { initApi } from "@/services/api";
 
 function App() {
   const { user } = useUser();
-  const [currentConversationId, setCurrentConversationId] = useState<
-    string | null
-  >(null);
-  const [localMessages, setLocalMessages] = useState<Record<string, Message[]>>(
-    () => ({ ...messagesByConversation }),
-  );
+  const userId = user?.id || "";
 
-  console.log(user);
+  const { getToken } = useAuth();
+  initApi(getToken);
 
-  const currentConversation =
-    conversations.find((c) => c.id === currentConversationId) ?? null;
-  const messages = currentConversationId
-    ? (localMessages[currentConversationId] ?? [])
-    : [];
+  const [conversations, setConversations] = useState<Conversation[]>(dummyConversations);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [localMessages, setLocalMessages] = useState<Record<string, Message[]>>(() => ({ ...messagesByConversation }));
+
+  const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
+  const messages = currentConversationId ? (localMessages[currentConversationId] ?? []) : [];
 
   const handleSend = useCallback(
     (content: string) => {
-      if (!currentConversationId) return;
+      if (!currentConversationId || userId !== "") {
+        return;
+      }
+
       const msg: Message = {
         id: `m-local-${Date.now()}`,
         conversation_id: currentConversationId,
-        sender_id: currentUser.id,
+        sender_id: userId,
         content,
         created_at: new Date().toISOString(),
         updated_at: null,
@@ -52,44 +43,47 @@ function App() {
         [currentConversationId]: [...(prev[currentConversationId] ?? []), msg],
       }));
     },
-    [currentConversationId],
+    [currentConversationId, userId],
   );
+
+  const handleCreateConversation = useCallback((conversation: Conversation) => {
+    setConversations((prev) => [conversation, ...prev]);
+    setCurrentConversationId(conversation.id);
+  }, []);
+
+  function getConversationName(conv: Conversation): string {
+    if (conv.name) return conv.name;
+    const other = conv.participants.find((p) => p.user_id !== userId);
+    return other?.display_name ?? "Unknown";
+  }
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <AppLayout
         activeConversationId={currentConversationId}
         onSelectConversation={setCurrentConversationId}
+        conversations={conversations}
+        currentUserId={userId}
+        onCreateConversation={handleCreateConversation}
       >
         {currentConversation ? (
           <div className="flex h-dvh flex-col">
             <header className="flex items-center justify-between border-b px-4 py-3">
               <div>
-                <h1 className="text-lg font-semibold">
-                  {getConversationName(currentConversation)}
-                </h1>
-                {currentConversation.conversation_type === 'group' ? (
+                <h1 className="text-lg font-semibold">{getConversationName(currentConversation)}</h1>
+                {currentConversation.conversation_type === "group" ? (
                   <span className="text-xs text-muted-foreground">
                     {currentConversation.participants.length} members
                   </span>
                 ) : (
-                  <span className="text-xs font-medium text-primary">
-                    Online
-                  </span>
+                  <span className="text-xs font-medium text-primary">Online</span>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground"
-              >
+              <Button variant="ghost" size="icon" className="text-muted-foreground">
                 <Info className="h-5 w-5" />
               </Button>
             </header>
-            <MessageList
-              messages={messages}
-              isGroup={currentConversation.conversation_type === 'group'}
-            />
+            <MessageList messages={messages} isGroup={currentConversation.conversation_type === "group"} />
             <MessageInput onSend={handleSend} />
           </div>
         ) : (
