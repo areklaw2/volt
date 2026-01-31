@@ -7,7 +7,7 @@ import type { Message, Conversation } from '@/types';
 import { MessageSquare, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUser, useAuth } from '@clerk/react-router';
-import { initializeApi, createUser, fetchConversations, fetchMessages } from '@/services/api';
+import { initializeApi, createUser, fetchConversations, fetchMessages, markAsRead } from '@/services/api';
 import { connectWebSocket, sendMessage, disconnectWebSocket } from '@/services/ws';
 
 function App() {
@@ -23,6 +23,20 @@ function App() {
   const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
   const messages = currentConversationId ? (messagesByConversation[currentConversationId] ?? []) : [];
 
+  const unreadCounts: Record<string, number> = {};
+  for (const conv of conversations) {
+    const lastReadStr = conv.participants.find((p) => p.user_id === userId)?.last_read_at;
+    const msgs = messagesByConversation[conv.id] ?? [];
+    if (lastReadStr) {
+      const lastRead = new Date(lastReadStr).getTime();
+      unreadCounts[conv.id] = msgs.filter(
+        (m) => m.sender_id !== userId && new Date(m.created_at).getTime() > lastRead,
+      ).length;
+    } else {
+      unreadCounts[conv.id] = msgs.filter((m) => m.sender_id !== userId).length;
+    }
+  }
+
   initializeApi(getToken);
 
   useEffect(() => {
@@ -37,7 +51,24 @@ function App() {
 
   useEffect(() => {
     fetchConversations(userId)
-      .then(setConversations)
+      .then((convs) => {
+        setConversations(convs);
+        Promise.all(
+          convs.map((c) =>
+            fetchMessages(c.id).then((msgs) => [c.id, msgs] as const),
+          ),
+        )
+          .then((results) => {
+            setMessagesByConversation((prev) => {
+              const next = { ...prev };
+              for (const [id, msgs] of results) {
+                next[id] = msgs;
+              }
+              return next;
+            });
+          })
+          .catch(() => {});
+      })
       .catch(() => setConversations([]));
   }, [userId]);
 
@@ -61,7 +92,25 @@ function App() {
         setMessagesByConversation((prev) => ({ ...prev, [currentConversationId]: msgs }));
       })
       .catch(() => {});
-  }, [currentConversationId]);
+
+    if (userId) {
+      const now = new Date().toISOString();
+      markAsRead(currentConversationId, userId)
+        .then(() => {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === currentConversationId
+                ? {
+                    ...c,
+                    participants: c.participants.map((p) => (p.user_id === userId ? { ...p, last_read_at: now } : p)),
+                  }
+                : c,
+            ),
+          );
+        })
+        .catch(() => {});
+    }
+  }, [currentConversationId, userId]);
 
   const handleSend = useCallback(
     (content: string) => {
@@ -101,6 +150,7 @@ function App() {
         conversations={conversations}
         currentUserId={userId}
         onCreateConversation={handleCreateConversation}
+        unreadCounts={unreadCounts}
       >
         {currentConversation ? (
           <div className="flex h-dvh flex-col">

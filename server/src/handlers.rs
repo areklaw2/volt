@@ -21,8 +21,8 @@ use crate::{
     handlers::{
         chat::chat,
         conversation::{
-            create_conversation, get_conversation, join_conversation, leave_conversation, query_conversations_by_user,
-            update_conversation,
+            create_conversation, get_conversation, join_conversation, leave_conversation, mark_as_read,
+            query_conversations_by_user, update_conversation,
         },
         messages::query_messages,
         user::{create_or_read_user, delete_user, get_users, update_user},
@@ -40,6 +40,7 @@ fn conversation_routes() -> Router<Arc<AppState>> {
         .route("/conversation/{id}", get(get_conversation).patch(update_conversation))
         .route("/conversation/{id}/join/{user_id}", post(join_conversation))
         .route("/conversation/{id}/leave/{user_id}", post(leave_conversation))
+        .route("/conversation/{id}/read/{user_id}", post(mark_as_read))
         .route("/conversations/{user_id}", get(query_conversations_by_user))
 }
 

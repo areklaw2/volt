@@ -8,6 +8,7 @@ interface AppLayoutProps {
   conversations: Conversation[];
   currentUserId: string;
   onCreateConversation: (conversation: Conversation) => void;
+  unreadCounts?: Record<string, number>;
   children: React.ReactNode;
 }
 
@@ -17,6 +18,7 @@ export function AppLayout({
   conversations,
   currentUserId,
   onCreateConversation,
+  unreadCounts,
   children,
 }: AppLayoutProps) {
   return (
@@ -27,6 +29,7 @@ export function AppLayout({
         conversations={conversations}
         currentUserId={currentUserId}
         onCreateConversation={onCreateConversation}
+        unreadCounts={unreadCounts}
       />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>

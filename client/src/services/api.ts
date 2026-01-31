@@ -60,6 +60,12 @@ export async function fetchConversations(userId: string): Promise<Conversation[]
   return res.json();
 }
 
+export async function markAsRead(conversationId: string, userId: string): Promise<void> {
+  await sendHttpRequest(`/conversation/${conversationId}/read/${userId}`, {
+    method: 'POST',
+  });
+}
+
 export async function fetchMessages(
   conversationId: string,
   params?: { offset?: number; limit?: number },

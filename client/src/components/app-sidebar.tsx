@@ -22,6 +22,7 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   conversations: Conversation[];
   currentUserId: string;
   onCreateConversation: (conversation: Conversation) => void;
+  unreadCounts?: Record<string, number>;
 }
 
 export function AppSidebar({
@@ -30,6 +31,7 @@ export function AppSidebar({
   conversations: conversationsProp,
   currentUserId,
   onCreateConversation,
+  unreadCounts,
   ...props
 }: AppSidebarProps) {
   const [search, setSearch] = React.useState("");
@@ -85,6 +87,7 @@ export function AppSidebar({
               currentUserId={currentUserId}
               activeId={activeConversationId}
               onSelect={onSelectConversation}
+              unreadCounts={unreadCounts}
             />
           </SidebarGroupContent>
         </SidebarGroup>

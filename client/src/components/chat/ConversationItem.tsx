@@ -1,5 +1,5 @@
 import type { Conversation } from '@/types';
-import { getLastMessage, getUnreadCount } from '@/data/dummy';
+import { getLastMessage } from '@/data/dummy';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 const AVATAR_COLORS = [
@@ -49,13 +49,13 @@ interface ConversationItemProps {
   currentUserId: string;
   isActive: boolean;
   onClick: () => void;
+  unreadCount?: number;
 }
 
-export function ConversationItem({ conversation, currentUserId, isActive, onClick }: ConversationItemProps) {
+export function ConversationItem({ conversation, currentUserId, isActive, onClick, unreadCount = 0 }: ConversationItemProps) {
   const name = getConversationName(conversation, currentUserId);
   const initials = getInitials(name);
   const lastMsg = getLastMessage(conversation.id);
-  const unreadCount = getUnreadCount(conversation.id, currentUserId);
   const isOwnLastMsg = lastMsg?.sender_id === currentUserId;
 
   return (

@@ -8,9 +8,14 @@ use axum::{
 };
 use uuid::Uuid;
 
+use chrono::Utc;
+
 use crate::{
     AppState,
-    dto::conversation::{ConversationResponse, CreateConversationRequest, UpdateConversationRequest},
+    dto::{
+        conversation::{ConversationResponse, CreateConversationRequest, UpdateConversationRequest},
+        user_conversation::UpdateUserConversationRequest,
+    },
     errors::{AppError, OptionExt},
     repositories::conversation::ConversationType,
 };
@@ -72,6 +77,18 @@ pub async fn leave_conversation(
     Path((id, user_id)): Path<(Uuid, String)>,
 ) -> Result<impl IntoResponse, AppError> {
     state.repository.delete_user_conversation(user_id, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn mark_as_read(
+    State(state): State<Arc<AppState>>,
+    Path((id, user_id)): Path<(Uuid, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    let request = UpdateUserConversationRequest {
+        joined_at: None,
+        last_read_at: Some(Utc::now()),
+    };
+    state.repository.update_user_conversation(user_id, id, request).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

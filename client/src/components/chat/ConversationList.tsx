@@ -6,6 +6,7 @@ interface ConversationListProps {
   currentUserId: string;
   activeId: string | null;
   onSelect: (id: string) => void;
+  unreadCounts?: Record<string, number>;
 }
 
 export function ConversationList({
@@ -13,24 +14,22 @@ export function ConversationList({
   currentUserId,
   activeId,
   onSelect,
+  unreadCounts,
 }: ConversationListProps) {
   if (conversations.length === 0) {
-    return (
-      <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-        No conversations found
-      </div>
-    );
+    return <div className="px-3 py-8 text-center text-sm text-muted-foreground">No conversations found</div>;
   }
 
   return (
     <div className="flex flex-col gap-0.5">
-      {conversations.map((conv) => (
+      {conversations.map((conversation) => (
         <ConversationItem
-          key={conv.id}
-          conversation={conv}
+          key={conversation.id}
+          conversation={conversation}
           currentUserId={currentUserId}
-          isActive={conv.id === activeId}
-          onClick={() => onSelect(conv.id)}
+          isActive={conversation.id === activeId}
+          onClick={() => onSelect(conversation.id)}
+          unreadCount={unreadCounts?.[conversation.id] ?? 0}
         />
       ))}
     </div>
