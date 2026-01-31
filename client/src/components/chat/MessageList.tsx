@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
-import type { Message } from "@/types";
+import type { Message, Participant } from "@/types";
 import { MessageItem } from "./MessageItem";
 
 interface MessageListProps {
   messages: Message[];
+  currentUserId: string;
+  participants: Participant[];
   isGroup?: boolean;
 }
 
@@ -20,7 +22,7 @@ function formatDateSeparator(dateStr: string): string {
   });
 }
 
-export function MessageList({ messages, isGroup = false }: MessageListProps) {
+export function MessageList({ messages, currentUserId, participants, isGroup = false }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export function MessageList({ messages, isGroup = false }: MessageListProps) {
             </div>
             <div className="flex flex-col gap-2">
               {group.messages.map((msg) => (
-                <MessageItem key={msg.id} message={msg} showSenderName={isGroup} />
+                <MessageItem key={msg.id} message={msg} currentUserId={currentUserId} participants={participants} showSenderName={isGroup} />
               ))}
             </div>
           </div>

@@ -1,9 +1,10 @@
-import type { Message as MessageType, User } from '@/types';
-import { currentUser, getUserById } from '@/data/dummy';
+import type { Message as MessageType, Participant } from '@/types';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 interface MessageProps {
   message: MessageType;
+  currentUserId: string;
+  participants: Participant[];
   showSenderName?: boolean;
 }
 
@@ -15,9 +16,9 @@ function formatTime(dateStr: string): string {
 }
 
 //TODO: fix dark mode colors
-export function MessageItem({ message, showSenderName = false }: MessageProps) {
-  const isOwn = message.sender_id === currentUser.id;
-  const sender: User | undefined = getUserById(message.sender_id);
+export function MessageItem({ message, currentUserId, participants, showSenderName = false }: MessageProps) {
+  const isOwn = message.sender_id === currentUserId;
+  const sender = participants.find((p) => p.user_id === message.sender_id);
   const initials = sender
     ? sender.display_name
         .split(' ')

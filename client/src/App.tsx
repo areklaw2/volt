@@ -3,18 +3,27 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AppLayout } from '@/components/app-layout';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
-import { messagesByConversation } from '@/data/dummy';
 import type { Message, Conversation } from '@/types';
 import { MessageSquare, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useUser, useAuth } from '@clerk/react-router';
-import { initApi, createUser, fetchConversations } from '@/services/api';
+import { initializeApi, createUser, fetchConversations, fetchMessages } from '@/services/api';
+import { connectWebSocket, sendMessage, disconnectWebSocket } from '@/services/ws';
 
 function App() {
   const { user } = useUser();
-
   const { getToken } = useAuth();
-  initApi(getToken);
+
+  const userId = user?.id || '';
+
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [messagesByConversation, setMessagesByConversation] = useState<Record<string, Message[]>>({});
+
+  const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
+  const messages = currentConversationId ? (messagesByConversation[currentConversationId] ?? []) : [];
+
+  initializeApi(getToken);
 
   useEffect(() => {
     if (!user) {
@@ -26,38 +35,40 @@ function App() {
     createUser(user.id, username, displayName).catch(() => {});
   }, [user]);
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const userId = user?.id || '';
   useEffect(() => {
     fetchConversations(userId)
       .then(setConversations)
       .catch(() => setConversations([]));
   }, [userId]);
 
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [localMessages, setLocalMessages] = useState<Record<string, Message[]>>(() => ({ ...messagesByConversation }));
+  useEffect(() => {
+    if (!userId) return;
+    connectWebSocket(userId, (msg) => {
+      setMessagesByConversation((prev) => ({
+        ...prev,
+        [msg.conversation_id]: [...(prev[msg.conversation_id] ?? []), msg],
+      }));
+    });
+    return () => disconnectWebSocket();
+  }, [userId]);
 
-  const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
-  const messages = currentConversationId ? (localMessages[currentConversationId] ?? []) : [];
+  useEffect(() => {
+    if (!currentConversationId) {
+      return;
+    }
+    fetchMessages(currentConversationId)
+      .then((msgs) => {
+        setMessagesByConversation((prev) => ({ ...prev, [currentConversationId]: msgs }));
+      })
+      .catch(() => {});
+  }, [currentConversationId]);
 
   const handleSend = useCallback(
     (content: string) => {
-      if (!currentConversationId || userId !== '') {
+      if (!currentConversationId || !userId) {
         return;
       }
-
-      const msg: Message = {
-        id: `m-local-${Date.now()}`,
-        conversation_id: currentConversationId,
-        sender_id: userId,
-        content,
-        created_at: new Date().toISOString(),
-        updated_at: null,
-      };
-      setLocalMessages((prev) => ({
-        ...prev,
-        [currentConversationId]: [...(prev[currentConversationId] ?? []), msg],
-      }));
+      sendMessage(currentConversationId, userId, content);
     },
     [currentConversationId, userId],
   );
@@ -108,7 +119,12 @@ function App() {
                 <Info className="h-5 w-5" />
               </Button>
             </header>
-            <MessageList messages={messages} isGroup={currentConversation.conversation_type === 'group'} />
+            <MessageList
+              messages={messages}
+              currentUserId={userId}
+              participants={currentConversation.participants}
+              isGroup={currentConversation.conversation_type === 'group'}
+            />
             <MessageInput onSend={handleSend} />
           </div>
         ) : (
