@@ -5,12 +5,11 @@ CREATE TABLE users (
     id TEXT NOT NULL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL,
-    avatar_url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE users IS 'User accounts and profile information';
-COMMENT ON COLUMN users.id IS 'ULID generated in application code';
+COMMENT ON COLUMN users.id IS 'Clerk user ID';
 
 
 CREATE TABLE conversations (

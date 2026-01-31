@@ -35,7 +35,7 @@ pub struct ConversationAggregate {
 pub trait ConversationRepository: Send + Sync {
     async fn create_conversation(&self, request: CreateConversationRequest) -> Result<ConversationAggregate, anyhow::Error>;
     async fn read_conversation(&self, id: Uuid) -> Result<Option<ConversationAggregate>, anyhow::Error>;
-    async fn read_conversations_by_user(&self, user_id: Uuid) -> Result<Vec<ConversationAggregate>, anyhow::Error>;
+    async fn read_conversations_by_user(&self, user_id: String) -> Result<Vec<ConversationAggregate>, anyhow::Error>;
     async fn update_conversation(&self, id: Uuid, request: UpdateConversationRequest) -> Result<Option<Conversation>, anyhow::Error>;
     async fn delete_conversation(&self, id: Uuid) -> Result<(), anyhow::Error>;
 }
@@ -65,7 +65,7 @@ impl ConversationRepository for InMemoryRepository {
             };
 
             let mut participant = UserConversation {
-                user_id: user.id,
+                user_id: user.id.clone(),
                 conversation_id: conversation.id,
                 joined_at: None,
                 last_read_at: None,
@@ -77,11 +77,11 @@ impl ConversationRepository for InMemoryRepository {
                 participant.last_read_at = now;
             }
 
-            let key = (user.id, conversation.id);
+            let key = (user.id.clone(), conversation.id);
             user_conversations_repo.insert(key, participant.clone());
 
-            user_to_conversations_index.entry(user.id).or_default().push(conversation.id);
-            conversation_to_users_index.entry(conversation.id).or_default().push(user.id);
+            user_to_conversations_index.entry(user.id.clone()).or_default().push(conversation.id);
+            conversation_to_users_index.entry(conversation.id).or_default().push(user.id.clone());
 
             user_conversations.push(participant);
         }
@@ -89,7 +89,7 @@ impl ConversationRepository for InMemoryRepository {
         let users_repo = self.user_repos.read().await;
         let users: Vec<User> = user_conversations
             .iter()
-            .filter_map(|id| users_repo.get(&id.user_id).cloned())
+            .filter_map(|uc| users_repo.get(&uc.user_id).cloned())
             .collect();
         let result = ConversationAggregate {
             conversation,
@@ -110,7 +110,7 @@ impl ConversationRepository for InMemoryRepository {
         let user_conversations = match conversation_to_users_index.get(&conversation.id) {
             Some(user_ids) => user_ids
                 .iter()
-                .filter_map(|user_id| user_conversations_repo.get(&(*user_id, conversation.id)).cloned())
+                .filter_map(|user_id| user_conversations_repo.get(&(user_id.clone(), conversation.id)).cloned())
                 .collect(),
             None => Vec::new(),
         };
@@ -118,7 +118,7 @@ impl ConversationRepository for InMemoryRepository {
         let users_repo = self.user_repos.read().await;
         let users: Vec<User> = user_conversations
             .iter()
-            .filter_map(|id| users_repo.get(&id.user_id).cloned())
+            .filter_map(|uc| users_repo.get(&uc.user_id).cloned())
             .collect();
 
         let result = ConversationAggregate {
@@ -130,7 +130,7 @@ impl ConversationRepository for InMemoryRepository {
         Ok(Some(result))
     }
 
-    async fn read_conversations_by_user(&self, user_id: Uuid) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
+    async fn read_conversations_by_user(&self, user_id: String) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
         let users_repo = self.user_repos.read().await;
         let Some(user) = users_repo.get(&user_id) else {
             return Ok(Vec::new());
@@ -146,7 +146,7 @@ impl ConversationRepository for InMemoryRepository {
 
         let user_conversations: Vec<UserConversation> = conversation_ids
             .iter()
-            .filter_map(|conversation_id| user_conversations_repo.get(&(user_id, *conversation_id)).cloned())
+            .filter_map(|conversation_id| user_conversations_repo.get(&(user_id.clone(), *conversation_id)).cloned())
             .collect();
 
         let mut result: Vec<ConversationAggregate> = Vec::new();
@@ -190,7 +190,7 @@ impl ConversationRepository for InMemoryRepository {
         let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
 
         for user_id in user_ids {
-            user_conversations_repo.remove(&(user_id, conversation.id));
+            user_conversations_repo.remove(&(user_id.clone(), conversation.id));
             if let Some(conversation_ids) = user_to_conversations_index.get_mut(&user_id) {
                 conversation_ids.retain(|cid| *cid != conversation.id);
             }
@@ -212,7 +212,7 @@ impl ConversationRepository for DbRepository {
         todo!()
     }
 
-    async fn read_conversations_by_user(&self, user_id: Uuid) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
+    async fn read_conversations_by_user(&self, user_id: String) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
         todo!()
     }
 
@@ -236,6 +236,7 @@ mod tests {
         for i in 0..count {
             let user = repo
                 .create_user(CreateUserRequest {
+                    id: None,
                     username: format!("user{i}"),
                     display_name: format!("User {i}"),
                 })
@@ -249,7 +250,7 @@ mod tests {
     fn create_request(
         conversation_type: ConversationType,
         name: Option<&str>,
-        sender_id: Uuid,
+        sender_id: String,
         participants: Vec<String>,
     ) -> CreateConversationRequest {
         CreateConversationRequest {
@@ -264,7 +265,7 @@ mod tests {
     async fn create_conversation_returns_conversation_with_correct_fields() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
-        let sender = users[0].id;
+        let sender = users[0].id.clone();
         let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
         let request = create_request(ConversationType::Group, Some("Test Group"), sender, usernames);
 
@@ -280,9 +281,9 @@ mod tests {
     async fn create_conversation_sets_sender_timestamps() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
-        let sender = users[0].id;
+        let sender = users[0].id.clone();
         let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
-        let request = create_request(ConversationType::Direct, None, sender, usernames);
+        let request = create_request(ConversationType::Direct, None, sender.clone(), usernames);
 
         let agg = repo.create_conversation(request).await.unwrap();
 
@@ -299,9 +300,9 @@ mod tests {
     async fn create_conversation_generates_unique_id() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
-        let uid = users[0].id;
+        let uid = users[0].id.clone();
         let username = &users[0].username;
-        let request1 = create_request(ConversationType::Direct, None, uid, vec![username.into()]);
+        let request1 = create_request(ConversationType::Direct, None, uid.clone(), vec![username.into()]);
         let request2 = create_request(ConversationType::Group, Some("Group"), uid, vec![username.into()]);
 
         let conv1 = repo.create_conversation(request1).await.unwrap();
@@ -314,7 +315,7 @@ mod tests {
     async fn create_conversation_sets_created_at_timestamp() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
-        let uid = users[0].id;
+        let uid = users[0].id.clone();
         let username = &users[0].username;
         let before = Utc::now();
         let request = create_request(ConversationType::Direct, None, uid, vec![username.into()]);
@@ -329,7 +330,7 @@ mod tests {
     async fn create_direct_conversation_has_no_name() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
-        let uid = users[0].id;
+        let uid = users[0].id.clone();
         let request = create_request(ConversationType::Direct, None, uid, vec![users[0].username.clone()]);
 
         let agg = repo.create_conversation(request).await.unwrap();
@@ -342,7 +343,7 @@ mod tests {
     async fn create_group_conversation_has_name() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
-        let uid = users[0].id;
+        let uid = users[0].id.clone();
         let request = create_request(ConversationType::Group, Some("My Group Chat"), uid, vec![users[0].username.clone()]);
 
         let agg = repo.create_conversation(request).await.unwrap();
@@ -355,7 +356,7 @@ mod tests {
     async fn read_conversation_returns_existing_with_user_conversations_and_users() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 3).await;
-        let sender = users[0].id;
+        let sender = users[0].id.clone();
         let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
         let request = create_request(ConversationType::Group, Some("Test"), sender, usernames.clone());
         let created = repo.create_conversation(request).await.unwrap();
@@ -386,7 +387,7 @@ mod tests {
     async fn update_conversation_updates_name() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
-        let uid = users[0].id;
+        let uid = users[0].id.clone();
         let request = create_request(ConversationType::Group, Some("Original"), uid, vec![users[0].username.clone()]);
         let created = repo.create_conversation(request).await.unwrap();
 
@@ -402,7 +403,7 @@ mod tests {
     async fn update_conversation_sets_updated_at() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
-        let uid = users[0].id;
+        let uid = users[0].id.clone();
         let request = create_request(ConversationType::Group, Some("Test"), uid, vec![users[0].username.clone()]);
         let created = repo.create_conversation(request).await.unwrap();
         assert!(created.conversation.updated_at.is_none());
@@ -436,9 +437,9 @@ mod tests {
     async fn delete_conversation_removes_conversation_and_user_conversations() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
-        let sender = users[0].id;
+        let sender = users[0].id.clone();
         let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
-        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+        let participant_ids: Vec<String> = users.iter().map(|u| u.id.clone()).collect();
         let request = create_request(ConversationType::Direct, None, sender, usernames.clone());
         let created = repo.create_conversation(request).await.unwrap();
         let conv_id = created.conversation.id;
@@ -450,7 +451,7 @@ mod tests {
 
         let user_conversations_repo = repo.user_conversations_repo.read().await;
         for uid in &participant_ids {
-            assert!(user_conversations_repo.get(&(*uid, conv_id)).is_none());
+            assert!(user_conversations_repo.get(&(uid.clone(), conv_id)).is_none());
         }
         drop(user_conversations_repo);
 
@@ -458,7 +459,6 @@ mod tests {
         assert!(conversation_to_users_index.get(&conv_id).is_none());
         drop(conversation_to_users_index);
 
-        // Verify user_to_conversations_index entries were cleaned up
         let user_to_conversations_index = repo.user_to_conversations_index.read().await;
         for uid in &participant_ids {
             if let Some(conv_ids) = user_to_conversations_index.get(uid) {
@@ -471,15 +471,15 @@ mod tests {
     async fn read_conversations_by_user_returns_conversations_for_user() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
-        let sender = users[0].id;
+        let sender = users[0].id.clone();
         let usernames: Vec<String> = users.iter().map(|u| u.username.clone()).collect();
 
         let conv1 = repo
-            .create_conversation(create_request(ConversationType::Group, Some("Group 1"), sender, usernames.clone()))
+            .create_conversation(create_request(ConversationType::Group, Some("Group 1"), sender.clone(), usernames.clone()))
             .await
             .unwrap();
         let conv2 = repo
-            .create_conversation(create_request(ConversationType::Group, Some("Group 2"), sender, usernames.clone()))
+            .create_conversation(create_request(ConversationType::Group, Some("Group 2"), sender.clone(), usernames.clone()))
             .await
             .unwrap();
 
@@ -496,7 +496,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 1).await;
 
-        let result = repo.read_conversations_by_user(users[0].id).await.unwrap();
+        let result = repo.read_conversations_by_user(users[0].id.clone()).await.unwrap();
 
         assert!(result.is_empty());
     }
@@ -504,9 +504,8 @@ mod tests {
     #[tokio::test]
     async fn read_conversations_by_user_returns_empty_for_nonexistent_user() {
         let repo = InMemoryRepository::new();
-        let random_id = Uuid::now_v7();
 
-        let result = repo.read_conversations_by_user(random_id).await.unwrap();
+        let result = repo.read_conversations_by_user("nonexistent".to_string()).await.unwrap();
 
         assert!(result.is_empty());
     }
@@ -515,8 +514,8 @@ mod tests {
     async fn read_conversations_by_user_does_not_return_other_users_conversations() {
         let repo = InMemoryRepository::new();
         let users = setup_users(&repo, 2).await;
-        let user1 = users[0].id;
-        let user2 = users[1].id;
+        let user1 = users[0].id.clone();
+        let user2 = users[1].id.clone();
 
         repo.create_conversation(create_request(
             ConversationType::Direct,

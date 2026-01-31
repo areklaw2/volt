@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, Deserialize, Clone)]
 pub struct CreateConversationRequest {
     pub conversation_type: ConversationType,
-    pub sender_id: Uuid,
+    pub sender_id: String,
     pub participants: Vec<String>,
     pub name: Option<String>,
 }
@@ -34,13 +34,13 @@ pub struct ConversationResponse {
 
 impl From<ConversationAggregate> for ConversationResponse {
     fn from(agg: ConversationAggregate) -> Self {
-        let users_map: HashMap<Uuid, _> = agg.users.into_iter().map(|u| (u.id, u)).collect();
+        let users_map: HashMap<String, _> = agg.users.into_iter().map(|u| (u.id.clone(), u)).collect();
         let participant_responses: Vec<ParticipantResponse> = agg
             .user_conversations
             .into_iter()
             .filter_map(|p| {
                 users_map.get(&p.user_id).map(|user| ParticipantResponse {
-                    id: user.id,
+                    id: user.id.clone(),
                     username: user.username.clone(),
                     display_name: user.display_name.clone(),
                     joined_at: p.joined_at,

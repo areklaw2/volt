@@ -4,7 +4,7 @@ use axum::{
     Router,
     error_handling::HandleErrorLayer,
     http::{self, HeaderValue, Method, StatusCode},
-    routing::{get, patch, post},
+    routing::{get, post},
 };
 use clerk_rs::{
     ClerkConfiguration,
@@ -25,12 +25,14 @@ use crate::{
             update_conversation,
         },
         messages::query_messages,
+        user::{create_user, get_user},
     },
 };
 
 pub mod chat;
 pub mod conversation;
 pub mod messages;
+pub mod user;
 
 fn conversation_routes() -> Router<Arc<AppState>> {
     Router::new()
@@ -53,7 +55,13 @@ pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
     let clerk_config = ClerkConfiguration::new(None, None, Some(config.clerk_secret_key.expose_secret().to_string()), None);
     let clerk = Clerk::new(clerk_config);
 
-    let http_routes = Router::new().merge(conversation_routes()).merge(message_routes()).layer(
+fn user_routes() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/user", post(create_user))
+        .route("/user/{id}", get(get_user))
+}
+
+    let http_routes = Router::new().merge(conversation_routes()).merge(message_routes()).merge(user_routes()).layer(
         ServiceBuilder::new()
             .layer(HandleErrorLayer::new(|error: BoxError| async move {
                 if error.is::<tower::timeout::error::Elapsed>() {

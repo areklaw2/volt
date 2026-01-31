@@ -8,7 +8,6 @@ use secrecy::ExposeSecret;
 use sqlx::postgres::PgPoolOptions;
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::{RwLock, mpsc};
-use uuid::Uuid;
 
 use crate::{
     config::AppConfig,
@@ -17,7 +16,7 @@ use crate::{
 
 pub struct AppState {
     pub repository: Arc<dyn Repository>,
-    pub active_connections: Arc<RwLock<HashMap<Uuid, Vec<mpsc::Sender<Message>>>>>,
+    pub active_connections: Arc<RwLock<HashMap<String, Vec<mpsc::Sender<Message>>>>>,
 }
 
 pub async fn configure_state(config: &AppConfig) -> Result<Arc<AppState>, anyhow::Error> {

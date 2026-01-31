@@ -33,11 +33,11 @@ impl DbRepository {
 pub struct InMemoryRepository {
     conversations_repo: RwLock<HashMap<Uuid, Conversation>>,
     messages_repo: RwLock<HashMap<Uuid, Message>>,
-    user_repos: RwLock<HashMap<Uuid, User>>,
+    user_repos: RwLock<HashMap<String, User>>,
     username_to_user_index: RwLock<HashMap<String, User>>,
-    user_conversations_repo: RwLock<HashMap<(Uuid, Uuid), UserConversation>>,
-    user_to_conversations_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
-    conversation_to_users_index: RwLock<HashMap<Uuid, Vec<Uuid>>>,
+    user_conversations_repo: RwLock<HashMap<(String, Uuid), UserConversation>>,
+    user_to_conversations_index: RwLock<HashMap<String, Vec<Uuid>>>,
+    conversation_to_users_index: RwLock<HashMap<Uuid, Vec<String>>>,
 }
 
 impl Repository for InMemoryRepository {}

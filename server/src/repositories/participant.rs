@@ -11,7 +11,7 @@ use crate::{
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 pub struct UserConversation {
-    pub user_id: Uuid,
+    pub user_id: String,
     pub conversation_id: Uuid,
     pub joined_at: Option<DateTime<Utc>>,
     pub last_read_at: Option<DateTime<Utc>>,
@@ -19,35 +19,38 @@ pub struct UserConversation {
 
 #[async_trait]
 pub trait UserConversationRepository: Send + Sync {
-    async fn create_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error>;
+    async fn create_user_conversation(&self, user_id: String, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error>;
     async fn update_user_conversation(
         &self,
-        user_id: Uuid,
+        user_id: String,
         conversation_id: Uuid,
         request: UpdateUserConversationRequest,
     ) -> Result<Option<UserConversation>, anyhow::Error>;
-    async fn delete_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error>;
+    async fn delete_user_conversation(&self, user_id: String, conversation_id: Uuid) -> Result<(), anyhow::Error>;
 }
 
 #[async_trait]
 impl UserConversationRepository for InMemoryRepository {
-    async fn create_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error> {
+    async fn create_user_conversation(&self, user_id: String, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error> {
         let mut user_conversations = self.user_conversations_repo.write().await;
         let mut conversation_to_users_index = self.conversation_to_users_index.write().await;
         let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
 
         let now = Some(Utc::now());
         let user_conversation = UserConversation {
-            user_id,
-            conversation_id: conversation_id,
+            user_id: user_id.clone(),
+            conversation_id,
             joined_at: now,
             last_read_at: now,
         };
 
-        let key = (user_id, conversation_id);
+        let key = (user_id.clone(), conversation_id);
         user_conversations.insert(key, user_conversation.clone());
 
-        user_to_conversations_index.entry(user_id).or_default().push(conversation_id);
+        user_to_conversations_index
+            .entry(user_id.clone())
+            .or_default()
+            .push(conversation_id);
         conversation_to_users_index.entry(conversation_id).or_default().push(user_id);
 
         Ok(user_conversation)
@@ -55,7 +58,7 @@ impl UserConversationRepository for InMemoryRepository {
 
     async fn update_user_conversation(
         &self,
-        user_id: Uuid,
+        user_id: String,
         conversation_id: Uuid,
         request: UpdateUserConversationRequest,
     ) -> Result<Option<UserConversation>, anyhow::Error> {
@@ -78,8 +81,8 @@ impl UserConversationRepository for InMemoryRepository {
         Ok(Some(user_conversation.clone()))
     }
 
-    async fn delete_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error> {
-        let key = (user_id, conversation_id);
+    async fn delete_user_conversation(&self, user_id: String, conversation_id: Uuid) -> Result<(), anyhow::Error> {
+        let key = (user_id.clone(), conversation_id);
         self.user_conversations_repo.write().await.remove(&key);
 
         let mut user_to_conversations_index = self.user_to_conversations_index.write().await;
@@ -99,20 +102,20 @@ impl UserConversationRepository for InMemoryRepository {
 #[async_trait]
 #[allow(unused)]
 impl UserConversationRepository for DbRepository {
-    async fn create_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error> {
+    async fn create_user_conversation(&self, user_id: String, conversation_id: Uuid) -> Result<UserConversation, anyhow::Error> {
         todo!()
     }
 
     async fn update_user_conversation(
         &self,
-        user_id: Uuid,
+        user_id: String,
         conversation_id: Uuid,
         request: UpdateUserConversationRequest,
     ) -> Result<Option<UserConversation>, anyhow::Error> {
         todo!()
     }
 
-    async fn delete_user_conversation(&self, user_id: Uuid, conversation_id: Uuid) -> Result<(), anyhow::Error> {
+    async fn delete_user_conversation(&self, user_id: String, conversation_id: Uuid) -> Result<(), anyhow::Error> {
         todo!()
     }
 }
@@ -125,9 +128,9 @@ mod tests {
     async fn create_user_conversation_creates_user_conversation() {
         let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
-        let user_id = Uuid::now_v7();
+        let user_id = "user_123".to_string();
 
-        let user_conversation = repo.create_user_conversation(user_id, conversation_id).await.unwrap();
+        let user_conversation = repo.create_user_conversation(user_id.clone(), conversation_id).await.unwrap();
 
         assert_eq!(user_conversation.user_id, user_id);
         assert_eq!(user_conversation.conversation_id, conversation_id);
@@ -139,12 +142,12 @@ mod tests {
     async fn create_user_conversation_is_persisted() {
         let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
-        let user_id = Uuid::now_v7();
+        let user_id = "user_123".to_string();
 
-        repo.create_user_conversation(user_id, conversation_id).await.unwrap();
+        repo.create_user_conversation(user_id.clone(), conversation_id).await.unwrap();
 
         let stored = repo.user_conversations_repo.read().await;
-        let uc = stored.get(&(user_id, conversation_id)).unwrap();
+        let uc = stored.get(&(user_id.clone(), conversation_id)).unwrap();
         assert_eq!(uc.user_id, user_id);
         assert_eq!(uc.conversation_id, conversation_id);
     }
@@ -153,16 +156,18 @@ mod tests {
     async fn update_user_conversation_updates_joined_at_when_none() {
         let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
-        let user_id = Uuid::now_v7();
+        let user_id = "user_123".to_string();
 
-        // Manually insert a user_conversation with no timestamps to test update
         let uc = UserConversation {
-            user_id,
+            user_id: user_id.clone(),
             conversation_id,
             joined_at: None,
             last_read_at: None,
         };
-        repo.user_conversations_repo.write().await.insert((user_id, conversation_id), uc);
+        repo.user_conversations_repo
+            .write()
+            .await
+            .insert((user_id.clone(), conversation_id), uc);
 
         let now = Utc::now();
         let update = UpdateUserConversationRequest {
@@ -182,8 +187,8 @@ mod tests {
     async fn update_user_conversation_does_not_overwrite_existing_joined_at() {
         let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
-        let user_id = Uuid::now_v7();
-        let created = repo.create_user_conversation(user_id, conversation_id).await.unwrap();
+        let user_id = "user_123".to_string();
+        let created = repo.create_user_conversation(user_id.clone(), conversation_id).await.unwrap();
         let original_joined_at = created.joined_at;
 
         let new_time = Utc::now();
@@ -204,8 +209,8 @@ mod tests {
     async fn update_user_conversation_updates_last_read_at() {
         let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
-        let user_id = Uuid::now_v7();
-        repo.create_user_conversation(user_id, conversation_id).await.unwrap();
+        let user_id = "user_123".to_string();
+        repo.create_user_conversation(user_id.clone(), conversation_id).await.unwrap();
 
         let new_time = Utc::now();
         let update = UpdateUserConversationRequest {
@@ -224,15 +229,13 @@ mod tests {
     #[tokio::test]
     async fn update_user_conversation_returns_none_for_nonexistent() {
         let repo = InMemoryRepository::new();
-        let random_user = Uuid::now_v7();
-        let random_conversation = Uuid::now_v7();
 
         let update = UpdateUserConversationRequest {
             joined_at: Some(Utc::now()),
             last_read_at: None,
         };
         let result = repo
-            .update_user_conversation(random_user, random_conversation, update)
+            .update_user_conversation("nonexistent".to_string(), Uuid::now_v7(), update)
             .await
             .unwrap();
 
@@ -243,10 +246,10 @@ mod tests {
     async fn delete_user_conversation_removes_from_main_storage() {
         let repo = InMemoryRepository::new();
         let conversation_id = Uuid::now_v7();
-        let user_id = Uuid::now_v7();
-        repo.create_user_conversation(user_id, conversation_id).await.unwrap();
+        let user_id = "user_123".to_string();
+        repo.create_user_conversation(user_id.clone(), conversation_id).await.unwrap();
 
-        repo.delete_user_conversation(user_id, conversation_id).await.unwrap();
+        repo.delete_user_conversation(user_id.clone(), conversation_id).await.unwrap();
 
         let stored = repo.user_conversations_repo.read().await;
         assert!(stored.get(&(user_id, conversation_id)).is_none());
@@ -255,10 +258,8 @@ mod tests {
     #[tokio::test]
     async fn delete_user_conversation_succeeds_for_nonexistent() {
         let repo = InMemoryRepository::new();
-        let random_user = Uuid::now_v7();
-        let random_conversation = Uuid::now_v7();
 
-        let result = repo.delete_user_conversation(random_user, random_conversation).await;
+        let result = repo.delete_user_conversation("nonexistent".to_string(), Uuid::now_v7()).await;
 
         assert!(result.is_ok());
     }

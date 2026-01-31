@@ -8,22 +8,21 @@ use axum::{
 use futures_util::{sink::SinkExt, stream::StreamExt};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
 use crate::{AppState, dto::mesagge::CreateMessageRequest, repositories::message::Message};
 
-pub async fn chat(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path(user_id): Path<Uuid>) -> impl IntoResponse {
+pub async fn chat(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path(user_id): Path<String>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state, user_id))
 }
 
-async fn handle_socket(stream: WebSocket, state: Arc<AppState>, user_id: Uuid) {
+async fn handle_socket(stream: WebSocket, state: Arc<AppState>, user_id: String) {
     let (mut ws_sender, mut ws_receiver) = stream.split();
 
     let (tx, mut rx) = mpsc::channel::<Message>(100);
 
     {
         let mut connections = state.active_connections.write().await;
-        connections.entry(user_id).or_insert_with(Vec::new).push(tx);
+        connections.entry(user_id.clone()).or_insert_with(Vec::new).push(tx);
     }
 
     let msg = format!("{user_id} joined.");

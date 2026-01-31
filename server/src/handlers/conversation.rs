@@ -61,8 +61,7 @@ pub async fn update_conversation(
 
 pub async fn join_conversation(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-    Path(user_id): Path<Uuid>,
+    Path((id, user_id)): Path<(Uuid, String)>,
 ) -> Result<impl IntoResponse, AppError> {
     state.repository.create_user_conversation(user_id, id).await?;
     Ok(StatusCode::CREATED)
@@ -70,8 +69,7 @@ pub async fn join_conversation(
 
 pub async fn leave_conversation(
     State(state): State<Arc<AppState>>,
-    Path(id): Path<Uuid>,
-    Path(user_id): Path<Uuid>,
+    Path((id, user_id)): Path<(Uuid, String)>,
 ) -> Result<impl IntoResponse, AppError> {
     state.repository.delete_user_conversation(user_id, id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -79,7 +77,7 @@ pub async fn leave_conversation(
 
 pub async fn query_conversations_by_user(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<Uuid>,
+    Path(user_id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
     let aggs = state.repository.read_conversations_by_user(user_id).await?;
     let response: Vec<ConversationResponse> = aggs.into_iter().map(|agg| ConversationResponse::from(agg)).collect();

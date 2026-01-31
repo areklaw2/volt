@@ -13,7 +13,7 @@ use crate::{
 pub struct Message {
     pub id: Uuid,
     pub conversation_id: Uuid,
-    pub sender_id: Uuid,
+    pub sender_id: String,
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
@@ -73,10 +73,10 @@ impl MessageRepository for DbRepository {
 mod tests {
     use super::*;
 
-    fn create_request(conversation_id: Uuid, sender_id: Uuid, content: &str) -> CreateMessageRequest {
+    fn create_request(conversation_id: Uuid, sender_id: &str, content: &str) -> CreateMessageRequest {
         CreateMessageRequest {
             conversation_id,
-            sender_id,
+            sender_id: sender_id.to_string(),
             content: content.to_string(),
         }
     }
@@ -85,7 +85,7 @@ mod tests {
     async fn create_message_returns_message_with_correct_fields() {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
-        let sender_id = Uuid::now_v7();
+        let sender_id = "user_123";
         let request = create_request(conv_id, sender_id, "Hello world");
 
         let message = repo.create_message(request).await.unwrap();
@@ -99,7 +99,7 @@ mod tests {
     async fn create_message_generates_unique_id() {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
-        let sender_id = Uuid::now_v7();
+        let sender_id = "user_123";
         let request1 = create_request(conv_id, sender_id, "First");
         let request2 = create_request(conv_id, sender_id, "Second");
 
@@ -113,7 +113,7 @@ mod tests {
     async fn create_message_sets_created_at_timestamp() {
         let repo = InMemoryRepository::new();
         let before = Utc::now();
-        let request = create_request(Uuid::now_v7(), Uuid::now_v7(), "Test");
+        let request = create_request(Uuid::now_v7(), "user_123", "Test");
 
         let message = repo.create_message(request).await.unwrap();
 
@@ -125,7 +125,7 @@ mod tests {
     async fn list_messages_returns_messages_for_conversation() {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
-        let sender_id = Uuid::now_v7();
+        let sender_id = "user_123";
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
         repo.create_message(create_request(conv_id, sender_id, "Second")).await.unwrap();
 
@@ -139,7 +139,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let conv1 = Uuid::now_v7();
         let conv2 = Uuid::now_v7();
-        let sender_id = Uuid::now_v7();
+        let sender_id = "user_123";
         repo.create_message(create_request(conv1, sender_id, "Conv1 msg")).await.unwrap();
         repo.create_message(create_request(conv2, sender_id, "Conv2 msg")).await.unwrap();
 
@@ -153,7 +153,7 @@ mod tests {
     async fn list_messages_applies_pagination_offset() {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
-        let sender_id = Uuid::now_v7();
+        let sender_id = "user_123";
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
         repo.create_message(create_request(conv_id, sender_id, "Second")).await.unwrap();
         repo.create_message(create_request(conv_id, sender_id, "Third")).await.unwrap();
@@ -171,7 +171,7 @@ mod tests {
     async fn list_messages_applies_pagination_limit() {
         let repo = InMemoryRepository::new();
         let conv_id = Uuid::now_v7();
-        let sender_id = Uuid::now_v7();
+        let sender_id = "user_123";
         repo.create_message(create_request(conv_id, sender_id, "First")).await.unwrap();
         repo.create_message(create_request(conv_id, sender_id, "Second")).await.unwrap();
         repo.create_message(create_request(conv_id, sender_id, "Third")).await.unwrap();

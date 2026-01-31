@@ -2,13 +2,12 @@ export interface User {
   id: string;
   username: string;
   display_name: string;
-  avatar_url: string;
   created_at: string;
 }
 
 export interface Conversation {
   id: string;
-  conversation_type: "direct" | "group";
+  conversation_type: 'direct' | 'group';
   title: string | null;
   created_at: string;
   updated_at: string | null;
