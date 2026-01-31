@@ -463,6 +463,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn read_conversations_by_user_returns_conversations_for_user() {
+        let repo = InMemoryRepository::new();
+        let users = setup_users(&repo, 2).await;
+        let sender = users[0].id;
+        let participant_ids: Vec<Uuid> = users.iter().map(|u| u.id).collect();
+
+        let conv1 = repo
+            .create_conversation(create_request(
+                ConversationType::Group,
+                Some("Group 1"),
+                sender,
+                participant_ids.clone(),
+            ))
+            .await
+            .unwrap();
+        let conv2 = repo
+            .create_conversation(create_request(
+                ConversationType::Group,
+                Some("Group 2"),
+                sender,
+                participant_ids.clone(),
+            ))
+            .await
+            .unwrap();
+
+        let result = repo.read_conversations_by_user(sender).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        let ids: Vec<Uuid> = result.iter().map(|a| a.conversation.id).collect();
+        assert!(ids.contains(&conv1.conversation.id));
+        assert!(ids.contains(&conv2.conversation.id));
+    }
+
+    #[tokio::test]
+    async fn read_conversations_by_user_returns_empty_for_user_with_no_conversations() {
+        let repo = InMemoryRepository::new();
+        let users = setup_users(&repo, 1).await;
+
+        let result = repo.read_conversations_by_user(users[0].id).await.unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn read_conversations_by_user_returns_empty_for_nonexistent_user() {
+        let repo = InMemoryRepository::new();
+        let random_id = Uuid::now_v7();
+
+        let result = repo.read_conversations_by_user(random_id).await.unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
+    async fn read_conversations_by_user_does_not_return_other_users_conversations() {
+        let repo = InMemoryRepository::new();
+        let users = setup_users(&repo, 2).await;
+        let user1 = users[0].id;
+        let user2 = users[1].id;
+
+        repo.create_conversation(create_request(ConversationType::Direct, None, user1, vec![user1]))
+            .await
+            .unwrap();
+
+        let result = repo.read_conversations_by_user(user2).await.unwrap();
+
+        assert!(result.is_empty());
+    }
+
+    #[tokio::test]
     async fn delete_conversation_succeeds_for_nonexistent() {
         let repo = InMemoryRepository::new();
         let random_id = Uuid::now_v7();
