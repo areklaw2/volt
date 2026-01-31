@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { AppLayout } from '@/components/app-layout';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
 import {
@@ -21,22 +21,27 @@ function getConversationName(conv: ConversationWithMeta): string {
 
 function App() {
   const { user } = useUser();
-  const [activeId, setActiveId] = useState<string | null>(null);
+  const [currentConversationId, setCurrentConversationId] = useState<
+    string | null
+  >(null);
   const [localMessages, setLocalMessages] = useState<Record<string, Message[]>>(
     () => ({ ...messagesByConversation }),
   );
 
   console.log(user);
 
-  const activeConv = conversations.find((c) => c.id === activeId) ?? null;
-  const messages = activeId ? (localMessages[activeId] ?? []) : [];
+  const currentConversation =
+    conversations.find((c) => c.id === currentConversationId) ?? null;
+  const messages = currentConversationId
+    ? (localMessages[currentConversationId] ?? [])
+    : [];
 
   const handleSend = useCallback(
     (content: string) => {
-      if (!activeId) return;
+      if (!currentConversationId) return;
       const msg: Message = {
         id: `m-local-${Date.now()}`,
-        conversation_id: activeId,
+        conversation_id: currentConversationId,
         sender_id: currentUser.id,
         content,
         created_at: new Date().toISOString(),
@@ -44,28 +49,28 @@ function App() {
       };
       setLocalMessages((prev) => ({
         ...prev,
-        [activeId]: [...(prev[activeId] ?? []), msg],
+        [currentConversationId]: [...(prev[currentConversationId] ?? []), msg],
       }));
     },
-    [activeId],
+    [currentConversationId],
   );
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <AppLayout
-        activeConversationId={activeId}
-        onSelectConversation={setActiveId}
+        activeConversationId={currentConversationId}
+        onSelectConversation={setCurrentConversationId}
       >
-        {activeConv ? (
+        {currentConversation ? (
           <div className="flex h-dvh flex-col">
             <header className="flex items-center justify-between border-b px-4 py-3">
               <div>
                 <h1 className="text-lg font-semibold">
-                  {getConversationName(activeConv)}
+                  {getConversationName(currentConversation)}
                 </h1>
-                {activeConv.conversation_type === 'group' ? (
+                {currentConversation.conversation_type === 'group' ? (
                   <span className="text-xs text-muted-foreground">
-                    {activeConv.participants.length} members
+                    {currentConversation.participants.length} members
                   </span>
                 ) : (
                   <span className="text-xs font-medium text-primary">
@@ -83,7 +88,7 @@ function App() {
             </header>
             <MessageList
               messages={messages}
-              isGroup={activeConv.conversation_type === 'group'}
+              isGroup={currentConversation.conversation_type === 'group'}
             />
             <MessageInput onSend={handleSend} />
           </div>

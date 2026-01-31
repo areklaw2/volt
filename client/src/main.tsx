@@ -11,7 +11,7 @@ import {
 import { BrowserRouter, Routes, Route } from 'react-router';
 import SignInPage from './components/sign-in';
 import SignUpPage from './components/sign-up';
-import App from './App';
+import App from './app';
 
 const PUBLISHABLE_KEY = env.CLERK_PUBLISHABLE_KEY;
 if (!PUBLISHABLE_KEY) {
