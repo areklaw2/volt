@@ -18,7 +18,7 @@ pub struct User {
 
 #[async_trait]
 pub trait UserRepository: Send + Sync {
-    async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error>;
+    async fn create_or_read_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error>;
     async fn read_user(&self, user_id: String) -> Result<Option<User>, anyhow::Error>;
     async fn read_users(&self) -> Result<Vec<User>, anyhow::Error>;
     async fn update_user(&self, user_id: String, request: UpdateUserRequest) -> Result<Option<User>, anyhow::Error>;
@@ -27,7 +27,13 @@ pub trait UserRepository: Send + Sync {
 
 #[async_trait]
 impl UserRepository for InMemoryRepository {
-    async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
+    async fn create_or_read_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
+        let users = self.user_repos.read().await;
+        if let Some(existing) = users.get(&request.id) {
+            return Ok(existing.clone());
+        }
+        drop(users);
+
         let user = User {
             id: request.id,
             username: request.username,
@@ -74,7 +80,7 @@ impl UserRepository for InMemoryRepository {
 #[async_trait]
 #[allow(unused)]
 impl UserRepository for DbRepository {
-    async fn create_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
+    async fn create_or_read_user(&self, request: CreateUserRequest) -> Result<User, anyhow::Error> {
         todo!()
     }
 
@@ -122,7 +128,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice Smith");
 
-        let user = repo.create_user(request).await.unwrap();
+        let user = repo.create_or_read_user(request).await.unwrap();
 
         assert_eq!(user.username, "alice");
         assert_eq!(user.display_name, "Alice Smith");
@@ -133,7 +139,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let request = create_request_with_id("clerk_123", "alice", "Alice Smith");
 
-        let user = repo.create_user(request).await.unwrap();
+        let user = repo.create_or_read_user(request).await.unwrap();
 
         assert_eq!(user.id, "clerk_123");
         assert_eq!(user.username, "alice");
@@ -145,8 +151,8 @@ mod tests {
         let request1 = create_request("alice", "Alice");
         let request2 = create_request("bob", "Bob");
 
-        let user1 = repo.create_user(request1).await.unwrap();
-        let user2 = repo.create_user(request2).await.unwrap();
+        let user1 = repo.create_or_read_user(request1).await.unwrap();
+        let user2 = repo.create_or_read_user(request2).await.unwrap();
 
         assert_ne!(user1.id, user2.id);
     }
@@ -157,7 +163,7 @@ mod tests {
         let before = Utc::now();
         let request = create_request("alice", "Alice");
 
-        let user = repo.create_user(request).await.unwrap();
+        let user = repo.create_or_read_user(request).await.unwrap();
 
         let after = Utc::now();
         assert!(user.created_at >= before && user.created_at <= after);
@@ -168,7 +174,7 @@ mod tests {
         let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice");
 
-        let created = repo.create_user(request).await.unwrap();
+        let created = repo.create_or_read_user(request).await.unwrap();
         let read = repo.read_user(created.id.clone()).await.unwrap();
 
         assert!(read.is_some());
@@ -179,7 +185,7 @@ mod tests {
     async fn read_user_returns_existing_user() {
         let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice Smith");
-        let created = repo.create_user(request).await.unwrap();
+        let created = repo.create_or_read_user(request).await.unwrap();
 
         let user = repo.read_user(created.id.clone()).await.unwrap().unwrap();
 
@@ -201,7 +207,7 @@ mod tests {
     async fn update_user_updates_display_name_only() {
         let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice");
-        let created = repo.create_user(request).await.unwrap();
+        let created = repo.create_or_read_user(request).await.unwrap();
 
         let update = UpdateUserRequest {
             display_name: Some("Alice Updated".to_string()),
@@ -215,7 +221,7 @@ mod tests {
     async fn update_user_with_all_none_leaves_user_unchanged() {
         let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice");
-        let created = repo.create_user(request).await.unwrap();
+        let created = repo.create_or_read_user(request).await.unwrap();
 
         let update = UpdateUserRequest { display_name: None };
         let updated = repo.update_user(created.id, update).await.unwrap().unwrap();
@@ -239,7 +245,7 @@ mod tests {
     async fn delete_user_removes_existing_user() {
         let repo = InMemoryRepository::new();
         let request = create_request("alice", "Alice");
-        let created = repo.create_user(request).await.unwrap();
+        let created = repo.create_or_read_user(request).await.unwrap();
 
         repo.delete_user(created.id.clone()).await.unwrap();
 

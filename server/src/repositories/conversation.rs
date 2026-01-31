@@ -242,7 +242,7 @@ mod tests {
         let mut users = Vec::new();
         for i in 0..count {
             let user = repo
-                .create_user(CreateUserRequest {
+                .create_or_read_user(CreateUserRequest {
                     id: format!("user_23{i}"),
                     username: format!("user{i}"),
                     display_name: format!("User {i}"),

@@ -4,7 +4,7 @@ use axum::{
     Router,
     error_handling::HandleErrorLayer,
     http::{self, HeaderValue, Method, StatusCode},
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use clerk_rs::{
     ClerkConfiguration,
@@ -25,7 +25,7 @@ use crate::{
             update_conversation,
         },
         messages::query_messages,
-        user::{create_user, delete_user, get_user, get_users, update_user},
+        user::{create_or_read_user, delete_user, get_users, update_user},
     },
 };
 
@@ -57,9 +57,9 @@ pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
 
     fn user_routes() -> Router<Arc<AppState>> {
         Router::new()
-            .route("/user", post(create_user))
+            .route("/user", post(create_or_read_user))
             .route("/users", get(get_users))
-            .route("/user/{id}", get(get_user).patch(update_user).delete(delete_user))
+            .route("/user/{id}", patch(update_user).delete(delete_user))
     }
 
     let http_routes = Router::new()

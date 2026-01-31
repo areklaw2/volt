@@ -13,16 +13,11 @@ use crate::{
     errors::{AppError, OptionExt},
 };
 
-pub async fn create_user(
+pub async fn create_or_read_user(
     State(state): State<Arc<AppState>>,
     Json(request): Json<CreateUserRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = state.repository.create_user(request).await?;
-    Ok((StatusCode::CREATED, Json(user)))
-}
-
-pub async fn get_user(State(state): State<Arc<AppState>>, Path(id): Path<String>) -> Result<impl IntoResponse, AppError> {
-    let user = state.repository.read_user(id).await?.ok_or_not_found("User not found")?;
+    let user = state.repository.create_or_read_user(request).await?;
     Ok(Json(user))
 }
 

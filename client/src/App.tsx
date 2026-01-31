@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppLayout } from "@/components/app-layout";
 import { MessageList } from "@/components/chat/MessageList";
@@ -8,14 +8,24 @@ import type { Message, Conversation } from "@/types";
 import { MessageSquare, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser, useAuth } from "@clerk/react-router";
-import { initApi } from "@/services/api";
+import { initApi, createUser } from "@/services/api";
 
 function App() {
   const { user } = useUser();
-  const userId = user?.id || "";
 
   const { getToken } = useAuth();
   initApi(getToken);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const username = user.username || user.primaryEmailAddress?.emailAddress || user.id;
+    const displayName = user.fullName || username;
+
+    createUser(user.id, username, displayName).catch(() => {});
+  }, [user]);
 
   const [conversations, setConversations] = useState<Conversation[]>(dummyConversations);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -24,6 +34,7 @@ function App() {
   const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
   const messages = currentConversationId ? (localMessages[currentConversationId] ?? []) : [];
 
+  const userId = user?.id || "";
   const handleSend = useCallback(
     (content: string) => {
       if (!currentConversationId || userId !== "") {

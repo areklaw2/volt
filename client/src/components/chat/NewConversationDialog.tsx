@@ -1,11 +1,11 @@
-import * as React from "react";
-import { X } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import type { User, Conversation } from "@/types";
-import { fetchUsers, createConversation } from "@/services/api";
+import * as React from 'react';
+import { X } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import type { User, Conversation } from '@/types';
+import { fetchUsers, createConversation } from '@/services/api';
 
 interface NewConversationDialogProps {
   currentUserId: string;
@@ -16,16 +16,16 @@ interface NewConversationDialogProps {
 export function NewConversationDialog({ currentUserId, trigger, onCreate }: NewConversationDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [users, setUsers] = React.useState<User[]>([]);
-  const [search, setSearch] = React.useState("");
+  const [search, setSearch] = React.useState('');
   const [selected, setSelected] = React.useState<User[]>([]);
-  const [groupName, setGroupName] = React.useState("");
+  const [conversationName, setConversationName] = React.useState('');
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
-    setSearch("");
+    setSearch('');
     setSelected([]);
-    setGroupName("");
+    setConversationName('');
 
     fetchUsers(currentUserId)
       .then(setUsers)
@@ -42,7 +42,7 @@ export function NewConversationDialog({ currentUserId, trigger, onCreate }: NewC
 
   const addUser = (user: User) => {
     setSelected((prev) => [...prev, user]);
-    setSearch("");
+    setSearch('');
   };
 
   const removeUser = (userId: string) => {
@@ -53,12 +53,16 @@ export function NewConversationDialog({ currentUserId, trigger, onCreate }: NewC
     if (selected.length === 0) return;
     setLoading(true);
     try {
-      const isGroup = selected.length >= 2;
+      const participants = selected.map((u) => u.id);
+      participants.push(currentUserId);
+      const isGroup = participants.length > 2;
+      const name = isGroup ? conversationName : selected[0].display_name;
+
       const conversation = await createConversation({
-        conversation_type: isGroup ? "group" : "direct",
+        conversation_type: isGroup ? 'group' : 'direct',
         sender_id: currentUserId,
-        participants: selected.map((u) => u.id),
-        name: isGroup ? groupName || null : null,
+        participants: participants,
+        name: name,
       });
       onCreate(conversation);
       setOpen(false);
@@ -115,13 +119,13 @@ export function NewConversationDialog({ currentUserId, trigger, onCreate }: NewC
           {selected.length >= 2 && (
             <Input
               placeholder="Group name (optional)"
-              value={groupName}
-              onChange={(e) => setGroupName(e.target.value)}
+              value={conversationName}
+              onChange={(e) => setConversationName(e.target.value)}
             />
           )}
 
           <Button onClick={handleCreate} disabled={selected.length === 0 || loading}>
-            {loading ? "Creating..." : "Create"}
+            {loading ? 'Creating...' : 'Create'}
           </Button>
         </div>
       </DialogContent>
