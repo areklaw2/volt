@@ -16,10 +16,18 @@ function getAvatarColor(id: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function getConversationName(conv: Conversation, currentUserId: string): string {
-  if (conv.name) return conv.name;
-  const other = conv.participants.find((p) => p.user_id !== currentUserId);
-  return other?.display_name ?? 'Unknown';
+function getConversationName(conversation: Conversation, currentUserId: string): string {
+  if (conversation.name) {
+    return conversation.name;
+  }
+  const others = conversation.participants.filter((p) => p.user_id !== currentUserId);
+  if (others.length === 0) {
+    return 'Unknown';
+  }
+  if (others.length === 1) {
+    return others[0].display_name ?? 'Unknown';
+  }
+  return others.map((p) => p.display_name ?? 'Unknown').join(', ');
 }
 
 function getInitials(name: string): string {
@@ -43,12 +51,7 @@ interface ConversationItemProps {
   onClick: () => void;
 }
 
-export function ConversationItem({
-  conversation,
-  currentUserId,
-  isActive,
-  onClick,
-}: ConversationItemProps) {
+export function ConversationItem({ conversation, currentUserId, isActive, onClick }: ConversationItemProps) {
   const name = getConversationName(conversation, currentUserId);
   const initials = getInitials(name);
   const lastMsg = getLastMessage(conversation.id);
@@ -62,12 +65,8 @@ export function ConversationItem({
         isActive ? 'bg-sidebar-accent' : ''
       }`}
     >
-      <Avatar
-        className={`h-11 w-11 shrink-0 ${getAvatarColor(conversation.id)}`}
-      >
-        <AvatarFallback
-          className={`text-xs font-semibold ${getAvatarColor(conversation.id)}`}
-        >
+      <Avatar className={`h-11 w-11 shrink-0 ${getAvatarColor(conversation.id)}`}>
+        <AvatarFallback className={`text-xs font-semibold ${getAvatarColor(conversation.id)}`}>
           {initials}
         </AvatarFallback>
       </Avatar>
@@ -75,9 +74,7 @@ export function ConversationItem({
         <div className="flex items-center justify-between">
           <span className="truncate font-medium">{name}</span>
           {lastMsg && (
-            <span className="ml-2 shrink-0 text-xs text-muted-foreground">
-              {formatTime(lastMsg.created_at)}
-            </span>
+            <span className="ml-2 shrink-0 text-xs text-muted-foreground">{formatTime(lastMsg.created_at)}</span>
           )}
         </div>
         {lastMsg && (

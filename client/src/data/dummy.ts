@@ -1,4 +1,4 @@
-import type { Conversation, Message, Participant } from '@/types';
+import type { Message, Participant } from '@/types';
 
 export const currentUser = {
   id: 'u-current',
@@ -40,9 +40,7 @@ export const users = [
   },
 ];
 
-const usersById = Object.fromEntries(
-  [currentUser, ...users].map((u) => [u.id, u]),
-);
+const usersById = Object.fromEntries([currentUser, ...users].map((u) => [u.id, u]));
 
 export function getUserById(id: string) {
   return usersById[id];
@@ -385,66 +383,13 @@ export function getLastMessage(conversationId: string): Message | undefined {
 }
 
 export function getUnreadCount(conversationId: string, userId: string): number {
-  const conv = conversations.find((c) => c.id === conversationId);
-  if (!conv) return 0;
-  const participant = conv.participants.find((p) => p.user_id === userId);
-  if (!participant?.last_read_at) return 0;
-  const msgs = messagesByConversation[conversationId] ?? [];
-  return msgs.filter(
-    (m) =>
-      m.sender_id !== userId &&
-      new Date(m.created_at) > new Date(participant.last_read_at!),
-  ).length;
-}
+  // const conv = conversations.find((c) => c.id === conversationId);
+  // if (!conv) return 0;
+  // const participant = conv.participants.find((p) => p.user_id === userId);
+  // if (!participant?.last_read_at) return 0;
+  // const msgs = messagesByConversation[conversationId] ?? [];
+  // return msgs.filter((m) => m.sender_id !== userId && new Date(m.created_at) > new Date(participant.last_read_at!))
+  //   .length;
 
-export const conversations: Conversation[] = [
-  {
-    id: 'c-1',
-    conversation_type: 'direct',
-    name: null,
-    created_at: daysAgo(7),
-    updated_at: daysAgo(0, 10, 22),
-    participants: [
-      toParticipant(currentUser, daysAgo(7), daysAgo(0, 10, 20)),
-      toParticipant(users[0], daysAgo(7)),
-    ],
-  },
-  {
-    id: 'c-2',
-    conversation_type: 'direct',
-    name: null,
-    created_at: daysAgo(5),
-    updated_at: daysAgo(2, 20, 15),
-    participants: [
-      toParticipant(currentUser, daysAgo(5), daysAgo(2, 20, 15)),
-      toParticipant(users[1], daysAgo(5)),
-    ],
-  },
-  {
-    id: 'c-3',
-    conversation_type: 'group',
-    name: 'Sprint Planning',
-    created_at: daysAgo(10),
-    updated_at: daysAgo(1, 11, 12),
-    participants: [
-      toParticipant(currentUser, daysAgo(10), daysAgo(1, 11, 5)),
-      toParticipant(users[0], daysAgo(10)),
-      toParticipant(users[2], daysAgo(10)),
-      toParticipant(users[3], daysAgo(10)),
-    ],
-  },
-  {
-    id: 'c-4',
-    conversation_type: 'group',
-    name: 'Watercooler',
-    created_at: daysAgo(14),
-    updated_at: daysAgo(2, 12, 22),
-    participants: [
-      toParticipant(currentUser, daysAgo(14), daysAgo(2, 12, 22)),
-      toParticipant(users[1], daysAgo(14)),
-      toParticipant(users[2], daysAgo(14)),
-      toParticipant(users[3], daysAgo(14)),
-      toParticipant(users[4], daysAgo(14)),
-    ],
-  },
-];
+  return 0;
+}

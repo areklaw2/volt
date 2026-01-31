@@ -140,34 +140,41 @@ impl ConversationRepository for InMemoryRepository {
     }
 
     async fn read_conversations_by_user(&self, user_id: String) -> Result<Vec<ConversationAggregate>, anyhow::Error> {
-        let users_repo = self.user_repos.read().await;
-        let Some(user) = users_repo.get(&user_id) else {
-            return Ok(Vec::new());
-        };
-
-        let user_conversations_repo = self.user_conversations_repo.read().await;
         let user_to_conversations_index = self.user_to_conversations_index.read().await;
-        let conversations_repo = self.conversations_repo.read().await;
 
         let Some(conversation_ids) = user_to_conversations_index.get(&user_id) else {
             return Ok(Vec::new());
         };
 
-        let user_conversations: Vec<UserConversation> = conversation_ids
-            .iter()
-            .filter_map(|conversation_id| user_conversations_repo.get(&(user_id.clone(), *conversation_id)).cloned())
-            .collect();
+        let users_repo = self.user_repos.read().await;
+        let conversations_repo = self.conversations_repo.read().await;
+        let conversation_to_users_index = self.conversation_to_users_index.read().await;
+        let user_conversations_repo = self.user_conversations_repo.read().await;
 
         let mut result: Vec<ConversationAggregate> = Vec::new();
-        for user_conversation in user_conversations {
-            if let Some(conversation) = conversations_repo.get(&user_conversation.conversation_id) {
-                let agg = ConversationAggregate {
-                    conversation: conversation.clone(),
-                    user_conversations: [user_conversation].to_vec(),
-                    users: [user.clone()].to_vec(),
-                };
-                result.push(agg);
-            }
+        for conversation_id in conversation_ids {
+            let Some(conversation) = conversations_repo.get(conversation_id) else {
+                continue;
+            };
+
+            let user_conversations: Vec<UserConversation> = match conversation_to_users_index.get(conversation_id) {
+                Some(user_ids) => user_ids
+                    .iter()
+                    .filter_map(|uid| user_conversations_repo.get(&(uid.clone(), *conversation_id)).cloned())
+                    .collect(),
+                None => Vec::new(),
+            };
+
+            let users: Vec<User> = user_conversations
+                .iter()
+                .filter_map(|uc| users_repo.get(&uc.user_id).cloned())
+                .collect();
+
+            result.push(ConversationAggregate {
+                conversation: conversation.clone(),
+                user_conversations,
+                users,
+            });
         }
 
         Ok(result)
@@ -535,14 +542,9 @@ mod tests {
         let user1 = users[0].id.clone();
         let user2 = users[1].id.clone();
 
-        repo.create_conversation(create_request(
-            ConversationType::Direct,
-            None,
-            user1,
-            vec![users[0].id.clone()],
-        ))
-        .await
-        .unwrap();
+        repo.create_conversation(create_request(ConversationType::Direct, None, user1, vec![users[0].id.clone()]))
+            .await
+            .unwrap();
 
         let result = repo.read_conversations_by_user(user2).await.unwrap();
 

@@ -3,7 +3,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { AppLayout } from '@/components/app-layout';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageInput } from '@/components/chat/MessageInput';
-import { conversations as dummyConversations, messagesByConversation } from '@/data/dummy';
+import { messagesByConversation } from '@/data/dummy';
 import type { Message, Conversation } from '@/types';
 import { MessageSquare, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,19 +26,19 @@ function App() {
     createUser(user.id, username, displayName).catch(() => {});
   }, [user]);
 
-  const [conversations, setConversations] = useState<Conversation[]>(dummyConversations);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [localMessages, setLocalMessages] = useState<Record<string, Message[]>>(() => ({ ...messagesByConversation }));
-
-  const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
-  const messages = currentConversationId ? (localMessages[currentConversationId] ?? []) : [];
-
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const userId = user?.id || '';
   useEffect(() => {
     fetchConversations(userId)
       .then(setConversations)
       .catch(() => setConversations([]));
   }, [userId]);
+
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [localMessages, setLocalMessages] = useState<Record<string, Message[]>>(() => ({ ...messagesByConversation }));
+
+  const currentConversation = conversations.find((c) => c.id === currentConversationId) ?? null;
+  const messages = currentConversationId ? (localMessages[currentConversationId] ?? []) : [];
 
   const handleSend = useCallback(
     (content: string) => {
@@ -67,10 +67,19 @@ function App() {
     setCurrentConversationId(conversation.id);
   }, []);
 
-  function getConversationName(conv: Conversation): string {
-    if (conv.name) return conv.name;
-    const other = conv.participants.find((p) => p.user_id !== userId);
-    return other?.display_name ?? 'Unknown';
+  function getConversationName(conversation: Conversation): string {
+    if (conversation.name) {
+      return conversation.name;
+    }
+
+    const others = conversation.participants.filter((p) => p.user_id !== userId);
+    if (others.length === 0) {
+      return 'Unknown';
+    }
+    if (others.length === 1) {
+      return others[0].display_name ?? 'Unknown';
+    }
+    return others.map((p) => p.display_name ?? 'Unknown').join(', ');
   }
 
   return (

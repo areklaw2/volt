@@ -33,7 +33,6 @@ export async function createUser(id: string, username: string, displayName: stri
 }
 
 export async function fetchUsers(currentUserId: string): Promise<User[]> {
-  console.log(currentUserId);
   const res = await sendRequest('/users');
   const data: User[] = await res.json();
   return data.filter((u) => u.id !== currentUserId);
