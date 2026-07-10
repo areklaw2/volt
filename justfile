@@ -1,4 +1,4 @@
-export DATABASE_URL := "postgres://postgres:pa55word@localhost:5432/volt"
+export DATABASE_URL := "postgres://postgres:pa55word@localhost:5555/volt"
 
 set working-directory := "server"
 
@@ -23,15 +23,15 @@ fmt:
   cargo fmt
 
 # Start the local dev postgres container
-db-up:
-  docker run -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=pa55word -e POSTGRES_DB=volt -p 5432:5432 -d --name volt_test postgres
+dbcontainer-up:
+  docker run -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=pa55word -e POSTGRES_DB=volt -p 5555:5432 -d --name volt_test postgres
 
 # Stop the local dev postgres container
-db-down:
+dbcontainer-down:
   docker stop volt_test
 
 # Remove the local dev postgres container entirely
-db-rm:
+dbcontainer-rm:
   docker rm -f volt_test
 
 # Create the local database (uses DATABASE_URL above)
