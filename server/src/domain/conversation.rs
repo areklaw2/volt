@@ -75,7 +75,7 @@ impl Conversation {
         })
     }
 
-    pub fn is_participant(&mut self, user_id: &UserId) -> bool {
+    pub fn is_participant(&self, user_id: &UserId) -> bool {
         self.participants.iter().any(|p| &p.user_id == user_id)
     }
 
@@ -185,7 +185,7 @@ mod tests {
     fn is_participant_true_for_member_false_for_stranger() {
         let creator = UserId::new();
         let stranger = UserId::new();
-        let mut convo = Conversation::new_group(ConversationId::new(), "The Group Chat".into(), creator.clone()).unwrap();
+        let convo = Conversation::new_group(ConversationId::new(), "The Group Chat".into(), creator.clone()).unwrap();
 
         assert!(convo.is_participant(&creator));
         assert!(!convo.is_participant(&stranger));
