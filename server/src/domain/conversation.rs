@@ -7,7 +7,8 @@ use crate::domain::{
     ids::{ConversationId, UserId},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "conversation_kind", rename_all = "lowercase")]
 pub enum ConversationKind {
     Direct,
     Group,

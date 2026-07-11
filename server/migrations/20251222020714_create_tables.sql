@@ -13,10 +13,10 @@ COMMENT ON COLUMN users.id IS 'Clerk user ID';
 
 
 CREATE TABLE conversations (
-    id TEXT NOT NULL PRIMARY KEY,
+    id UUID NOT NULL PRIMARY KEY,
     kind conversation_kind NOT NULL,
     title TEXT,
-    last_message_id TEXT,
+    last_message_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -32,8 +32,8 @@ COMMENT ON COLUMN conversations.last_message_id IS 'Most recent message ID, NULL
 
 
 CREATE TABLE messages (
-    id TEXT NOT NULL PRIMARY KEY,
-    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    id UUID NOT NULL PRIMARY KEY,
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     kind message_kind NOT NULL,
@@ -60,8 +60,8 @@ ALTER TABLE conversations
 
 CREATE TABLE user_conversations (
     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    last_read_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
+    conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+    last_read_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_seen_at TIMESTAMPTZ,
 

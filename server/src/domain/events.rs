@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 
 use crate::domain::ids::{ConversationId, MessageId, UserId};
 
+#[derive(Debug, Clone)]
 pub enum DomainEvent {
     MessageSent {
         message_id: MessageId,
