@@ -7,7 +7,7 @@ use crate::domain::{
     ids::{ConversationId, UserId},
 };
 
-#[derive(Debug, PartialEq, sqlx::Type)]
+#[derive(Debug, PartialEq, Clone, sqlx::Type)]
 #[sqlx(type_name = "conversation_kind", rename_all = "lowercase")]
 pub enum ConversationKind {
     Direct,
@@ -28,6 +28,7 @@ pub struct Conversation {
     kind: ConversationKind,
     #[getset(get = "pub")]
     title: Option<String>,
+    #[getset(get = "pub")]
     participants: Vec<Participant>,
     #[getset(get = "pub")]
     created_at: DateTime<Utc>,

@@ -1,12 +1,26 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 
-pub struct ConversationListItem {
-    pub conversation_id: String,
-    pub title: Option<String>,
-    pub last_message_preview: Option<String>,
-    pub last_message_at: Option<DateTime<Utc>>,
-    pub unread_count: i64,
+use crate::domain::ids::{ConversationId, UserId};
+
+#[derive(Serialize)]
+pub struct ParticipantView {
+    pub user_id: String,
+    pub username: String,
+    pub display_name: String,
+    pub joined_at: DateTime<Utc>,
+    pub last_read_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize)]
+pub struct ConversationView {
+    pub id: String,
+    pub conversation_type: String,
+    pub name: Option<String>,
+    pub participants: Vec<ParticipantView>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -16,63 +30,7 @@ pub enum QueryError {
 }
 
 #[async_trait]
-pub trait ConversationListQueries: Send + Sync {
-    async fn for_user(&self, user_id: &str) -> Result<Vec<ConversationListItem>, QueryError>;
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct MockConversationListQueries {
-        items: Vec<ConversationListItem>,
-    }
-
-    #[async_trait]
-    impl ConversationListQueries for MockConversationListQueries {
-        async fn for_user(&self, user_id: &str) -> Result<Vec<ConversationListItem>, QueryError> {
-            if user_id.is_empty() {
-                return Err(QueryError::Db(sqlx::Error::RowNotFound));
-            }
-            Ok(self
-                .items
-                .iter()
-                .map(|item| ConversationListItem {
-                    conversation_id: item.conversation_id.clone(),
-                    title: item.title.clone(),
-                    last_message_preview: item.last_message_preview.clone(),
-                    last_message_at: item.last_message_at,
-                    unread_count: item.unread_count,
-                })
-                .collect())
-        }
-    }
-
-    #[tokio::test]
-    async fn for_user_returns_items() {
-        let queries = MockConversationListQueries {
-            items: vec![ConversationListItem {
-                conversation_id: "conv-1".to_string(),
-                title: Some("Group".to_string()),
-                last_message_preview: Some("hey".to_string()),
-                last_message_at: None,
-                unread_count: 3,
-            }],
-        };
-
-        let result = queries.for_user("user-1").await.unwrap();
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].conversation_id, "conv-1");
-        assert_eq!(result[0].unread_count, 3);
-    }
-
-    #[tokio::test]
-    async fn for_user_propagates_query_error() {
-        let queries = MockConversationListQueries { items: vec![] };
-
-        let result = queries.for_user("").await;
-
-        assert!(matches!(result, Err(QueryError::Db(_))));
-    }
+pub trait ConversationViewQueries: Send + Sync {
+    async fn for_user(&self, user_id: &UserId) -> Result<Vec<ConversationView>, QueryError>;
+    async fn by_id(&self, id: &ConversationId) -> Result<Option<ConversationView>, QueryError>;
 }

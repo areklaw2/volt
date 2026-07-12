@@ -20,4 +20,10 @@ pub enum DomainError {
     ConversationNotFound,
     #[error("user is not a participant of this conversation")]
     NotAParticipant,
+    #[error("username cannot be empty")]
+    EmptyUsername,
+    #[error("display name cannot be empty")]
+    EmptyDisplayName,
+    #[error("internal error: {0}")]
+    Internal(String),
 }

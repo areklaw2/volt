@@ -15,6 +15,12 @@ macro_rules! id_type {
             }
         }
 
+        impl Default for $name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
+
         impl From<$name> for Uuid {
             fn from(id: $name) -> Uuid {
                 id.0

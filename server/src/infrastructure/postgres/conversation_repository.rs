@@ -1,12 +1,20 @@
-use crate::domain::conversation::{Conversation, ConversationKind, Participant};
-use crate::domain::ids::ConversationId;
-use crate::domain::repository::{ConversationRepository, RepoError};
 use async_trait::async_trait;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use crate::domain::conversation::{Conversation, ConversationKind, Participant};
+use crate::domain::ids::{ConversationId, UserId};
+use crate::domain::repository::{ConversationRepository, RepoError};
+
+#[derive(Clone)]
 pub struct SqlxConversationRepository {
     pool: PgPool,
+}
+
+impl SqlxConversationRepository {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
 }
 
 #[async_trait]
@@ -30,10 +38,7 @@ impl ConversationRepository for SqlxConversationRepository {
         let participants = parts
             .into_iter()
             .map(|p| Participant {
-                user_id: todo!(
-                    "user_conversations.user_id is still a Clerk string id; wire up once Clerk is removed: {}",
-                    p.user_id
-                ),
+                user_id: UserId::from_persistence(p.user_id),
                 joined_at: p.joined_at,
             })
             .collect();
@@ -53,17 +58,28 @@ impl ConversationRepository for SqlxConversationRepository {
         // note: no updated_at in this statement — projector owns that column
         sqlx::query!(
             "INSERT INTO conversations (id, kind, title, created_at)
-               VALUES ($1, $2, $3, $4)
+               VALUES ($1, $2::conversation_kind, $3, $4)
                ON CONFLICT (id) DO UPDATE SET title = $3",
             Uuid::from(c.id().clone()),
-            c.kind() as _,
+            c.kind().clone() as _,
             c.title().as_deref(),
-            c.created_at()
+            *c.created_at()
         )
         .execute(&mut *tx)
         .await?;
 
-        // sync user_conversations participant rows here (upsert + delete-missing)
+        for participant in c.participants() {
+            sqlx::query!(
+                "INSERT INTO user_conversations (user_id, conversation_id, joined_at)
+                   VALUES ($1, $2, $3)
+                   ON CONFLICT (user_id, conversation_id) DO NOTHING",
+                Uuid::from(participant.user_id.clone()),
+                Uuid::from(c.id().clone()),
+                participant.joined_at
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
 
         tx.commit().await?;
         Ok(())

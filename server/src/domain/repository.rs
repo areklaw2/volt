@@ -3,8 +3,9 @@ use thiserror::Error;
 
 use crate::domain::conversation::Conversation;
 use crate::domain::events::DomainEvent;
-use crate::domain::ids::{ConversationId, MessageId};
+use crate::domain::ids::{ConversationId, MessageId, UserId};
 use crate::domain::message::Message;
+use crate::domain::user::User;
 
 #[derive(Debug, Error)]
 pub enum RepoError {
@@ -28,6 +29,13 @@ pub trait ConversationRepository: Send + Sync {
 pub trait MessageRepository: Send + Sync {
     async fn find_by_id(&self, id: &MessageId) -> Result<Option<Message>, RepoError>;
     async fn save(&self, message: &Message) -> Result<(), RepoError>;
+}
+
+#[async_trait]
+pub trait UserRepository: Send + Sync {
+    async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepoError>;
+    async fn find_all(&self) -> Result<Vec<User>, RepoError>;
+    async fn save(&self, user: &User) -> Result<(), RepoError>;
 }
 
 #[async_trait]

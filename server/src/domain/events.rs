@@ -8,6 +8,7 @@ pub enum DomainEvent {
         message_id: MessageId,
         conversation_id: ConversationId,
         sender_id: UserId,
+        content: String,
         created_at: DateTime<Utc>,
     },
     MessageEdited {

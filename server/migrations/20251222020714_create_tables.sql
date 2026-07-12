@@ -2,14 +2,13 @@ CREATE TYPE conversation_kind AS ENUM ('direct', 'group');
 CREATE TYPE message_kind AS ENUM ('text', 'image');
 
 CREATE TABLE users (
-    id TEXT NOT NULL PRIMARY KEY,
+    id UUID NOT NULL PRIMARY KEY,
     username TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE users IS 'User accounts and profile information';
-COMMENT ON COLUMN users.id IS 'Clerk user ID';
 
 
 CREATE TABLE conversations (
@@ -34,7 +33,7 @@ COMMENT ON COLUMN conversations.last_message_id IS 'Most recent message ID, NULL
 CREATE TABLE messages (
     id UUID NOT NULL PRIMARY KEY,
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-    sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     kind message_kind NOT NULL,
     edited BOOLEAN NOT NULL DEFAULT FALSE,
@@ -59,7 +58,7 @@ ALTER TABLE conversations
   ON DELETE SET NULL;
 
 CREATE TABLE user_conversations (
-    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
     last_read_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
     joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

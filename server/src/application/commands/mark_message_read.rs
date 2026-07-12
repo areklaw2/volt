@@ -14,6 +14,10 @@ pub struct MarkReadHandler<P: EventPublisher> {
 }
 
 impl<P: EventPublisher> MarkReadHandler<P> {
+    pub fn new(events: P) -> Self {
+        Self { events }
+    }
+
     pub async fn handle(&self, cmd: MarkMessageReadCommand) -> Result<(), DomainError> {
         self.events
             .publish(DomainEvent::ConversationRead {

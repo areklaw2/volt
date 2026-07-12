@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use clerk_rs::apis::users_api::User;
 use getset::Getters;
 
 use crate::domain::{
@@ -8,7 +7,8 @@ use crate::domain::{
     ids::{ConversationId, MessageId, UserId},
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, sqlx::Type)]
+#[sqlx(type_name = "message_kind", rename_all = "lowercase")]
 pub enum MessageKind {
     Text,
     Image,
@@ -22,10 +22,15 @@ pub struct Message {
     conversation_id: ConversationId,
     #[getset(get = "pub")]
     sender_id: UserId,
+    #[getset(get = "pub")]
     content: String,
+    #[getset(get = "pub")]
     kind: MessageKind,
+    #[getset(get = "pub")]
     edited: bool,
+    #[getset(get = "pub")]
     created_at: DateTime<Utc>,
+    #[getset(get = "pub")]
     updated_at: Option<DateTime<Utc>>,
 }
 
@@ -58,6 +63,7 @@ impl Message {
             message_id: id,
             conversation_id,
             sender_id,
+            content: message.content.clone(),
             created_at: message.created_at,
         };
         Ok((message, event))
@@ -79,6 +85,7 @@ impl Message {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn from_persistence(
         id: MessageId,
         conversation_id: ConversationId,
@@ -169,11 +176,13 @@ mod tests {
                 message_id,
                 conversation_id: event_conversation_id,
                 sender_id: event_sender_id,
+                content,
                 created_at,
             } => {
                 assert_eq!(message_id, id);
                 assert_eq!(event_conversation_id, conversation_id);
                 assert_eq!(event_sender_id, sender_id);
+                assert_eq!(content, "hello");
                 assert_eq!(created_at, message.created_at);
             }
             _ => panic!("expected MessageSent event"),

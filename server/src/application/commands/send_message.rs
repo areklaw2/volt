@@ -5,7 +5,7 @@ use crate::domain::{
     repository::{ConversationRepository, EventPublisher, MessageRepository},
 };
 
-pub struct SendMessageCommnad {
+pub struct SendMessageCommand {
     pub conversation_id: ConversationId,
     pub sender_id: UserId,
     pub content: String,
@@ -27,7 +27,7 @@ impl<C: ConversationRepository, M: MessageRepository, P: EventPublisher> SendMes
         }
     }
 
-    pub async fn handle(&self, command: SendMessageCommnad) -> Result<MessageId, DomainError> {
+    pub async fn handle(&self, command: SendMessageCommand) -> Result<MessageId, DomainError> {
         let conversation = self
             .conversations
             .find_by_id(&command.conversation_id)
@@ -113,8 +113,8 @@ mod tests {
         }
     }
 
-    fn command(conversation_id: ConversationId, sender_id: UserId, content: &str) -> SendMessageCommnad {
-        SendMessageCommnad {
+    fn command(conversation_id: ConversationId, sender_id: UserId, content: &str) -> SendMessageCommand {
+        SendMessageCommand {
             conversation_id,
             sender_id,
             content: content.to_string(),
@@ -133,9 +133,7 @@ mod tests {
             MockEventPublisher::default(),
         );
 
-        let result = handler
-            .handle(command(ConversationId::new(), UserId::new(), "hello"))
-            .await;
+        let result = handler.handle(command(ConversationId::new(), UserId::new(), "hello")).await;
 
         assert_eq!(result.err(), Some(DomainError::ConversationNotFound));
     }
@@ -151,17 +149,14 @@ mod tests {
             MockEventPublisher::default(),
         );
 
-        let result = handler
-            .handle(command(ConversationId::new(), UserId::new(), "hello"))
-            .await;
+        let result = handler.handle(command(ConversationId::new(), UserId::new(), "hello")).await;
 
         assert_eq!(result.err(), Some(DomainError::ConversationNotFound));
     }
 
     #[tokio::test]
     async fn handle_returns_not_a_participant_when_sender_is_not_in_conversation() {
-        let conversation =
-            Conversation::new_group(ConversationId::new(), "Group".into(), UserId::new()).unwrap();
+        let conversation = Conversation::new_group(ConversationId::new(), "Group".into(), UserId::new()).unwrap();
         let handler = SendMessageHandler::new(
             MockConversationRepository {
                 conversation: Mutex::new(Some(conversation)),
@@ -171,9 +166,7 @@ mod tests {
             MockEventPublisher::default(),
         );
 
-        let result = handler
-            .handle(command(ConversationId::new(), UserId::new(), "hello"))
-            .await;
+        let result = handler.handle(command(ConversationId::new(), UserId::new(), "hello")).await;
 
         assert_eq!(result.err(), Some(DomainError::NotAParticipant));
     }
@@ -181,8 +174,7 @@ mod tests {
     #[tokio::test]
     async fn handle_propagates_domain_error_from_message_validation() {
         let sender = UserId::new();
-        let conversation =
-            Conversation::new_group(ConversationId::new(), "Group".into(), sender.clone()).unwrap();
+        let conversation = Conversation::new_group(ConversationId::new(), "Group".into(), sender.clone()).unwrap();
         let handler = SendMessageHandler::new(
             MockConversationRepository {
                 conversation: Mutex::new(Some(conversation)),
@@ -192,9 +184,7 @@ mod tests {
             MockEventPublisher::default(),
         );
 
-        let result = handler
-            .handle(command(ConversationId::new(), sender, "   "))
-            .await;
+        let result = handler.handle(command(ConversationId::new(), sender, "   ")).await;
 
         assert_eq!(result.err(), Some(DomainError::EmptyMessage));
     }
@@ -203,8 +193,7 @@ mod tests {
     async fn handle_saves_message_and_publishes_event_on_success() {
         let sender = UserId::new();
         let conversation_id = ConversationId::new();
-        let conversation =
-            Conversation::new_group(conversation_id.clone(), "Group".into(), sender.clone()).unwrap();
+        let conversation = Conversation::new_group(conversation_id.clone(), "Group".into(), sender.clone()).unwrap();
         let handler = SendMessageHandler::new(
             MockConversationRepository {
                 conversation: Mutex::new(Some(conversation)),
@@ -214,15 +203,10 @@ mod tests {
             MockEventPublisher::default(),
         );
 
-        let result = handler
-            .handle(command(conversation_id.clone(), sender.clone(), "hello"))
-            .await;
+        let result = handler.handle(command(conversation_id.clone(), sender.clone(), "hello")).await;
 
         let message_id = result.unwrap();
-        assert_eq!(
-            handler.messages.saved_id.lock().unwrap().as_ref(),
-            Some(&message_id)
-        );
+        assert_eq!(handler.messages.saved_id.lock().unwrap().as_ref(), Some(&message_id));
 
         match &*handler.events.published.lock().unwrap() {
             Some(DomainEvent::MessageSent {

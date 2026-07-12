@@ -4,14 +4,8 @@ use axum::{
     Router,
     error_handling::HandleErrorLayer,
     http::{self, HeaderValue, Method, StatusCode},
-    routing::{get, patch, post},
+    routing::{get, post},
 };
-use clerk_rs::{
-    ClerkConfiguration,
-    clerk::Clerk,
-    validators::{axum::ClerkLayer, jwks::MemoryCacheJwksProvider},
-};
-use secrecy::ExposeSecret;
 use tower::{BoxError, ServiceBuilder};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 
@@ -20,12 +14,9 @@ use crate::{
     config::AppConfig,
     handlers::{
         chat::chat,
-        conversation::{
-            create_conversation, get_conversation, join_conversation, leave_conversation, mark_as_read,
-            query_conversations_by_user, update_conversation,
-        },
+        conversation::{create_conversation, mark_as_read, query_conversations_by_user},
         messages::query_messages,
-        user::{create_or_read_user, delete_user, get_users, update_user},
+        user::{create_or_read_user, get_users},
     },
 };
 
@@ -37,9 +28,6 @@ pub mod user;
 fn conversation_routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/conversation", post(create_conversation))
-        .route("/conversation/{id}", get(get_conversation).patch(update_conversation))
-        .route("/conversation/{id}/join/{user_id}", post(join_conversation))
-        .route("/conversation/{id}/leave/{user_id}", post(leave_conversation))
         .route("/conversation/{id}/read/{user_id}", post(mark_as_read))
         .route("/conversations/{user_id}", get(query_conversations_by_user))
 }
@@ -52,17 +40,11 @@ fn chat_routes() -> Router<Arc<AppState>> {
     Router::new().route("/chat/{user_id}", get(chat))
 }
 
-pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
-    let clerk_config = ClerkConfiguration::new(None, None, Some(config.clerk_secret_key.expose_secret().to_string()), None);
-    let clerk = Clerk::new(clerk_config);
+fn user_routes() -> Router<Arc<AppState>> {
+    Router::new().route("/user", post(create_or_read_user)).route("/users", get(get_users))
+}
 
-    fn user_routes() -> Router<Arc<AppState>> {
-        Router::new()
-            .route("/user", post(create_or_read_user))
-            .route("/users", get(get_users))
-            .route("/user/{id}", patch(update_user).delete(delete_user))
-    }
-
+pub fn routes(_config: &AppConfig) -> Router<Arc<AppState>> {
     let http_routes = Router::new()
         .merge(conversation_routes())
         .merge(message_routes())
@@ -82,14 +64,10 @@ pub fn routes(config: &AppConfig) -> Router<Arc<AppState>> {
 
     let api_routes = Router::new().merge(http_routes).merge(chat_routes());
 
-    Router::new()
-        .nest("/api/v1", api_routes)
-        .layer(ClerkLayer::new(MemoryCacheJwksProvider::new(clerk), None, true))
-        .layer(
-            CorsLayer::new()
-                .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION])
-                .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
-                .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::PUT, Method::DELETE]),
-        )
-        .layer(TraceLayer::new_for_http())
+    Router::new().nest("/api/v1", api_routes).layer(
+        CorsLayer::new()
+            .allow_headers([http::header::CONTENT_TYPE, http::header::AUTHORIZATION])
+            .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
+            .allow_methods([Method::GET, Method::POST, Method::PATCH, Method::PUT, Method::DELETE]),
+    ).layer(TraceLayer::new_for_http())
 }

@@ -10,6 +10,7 @@ use crate::{
     infrastructure::projections::run_projections,
 };
 
+#[derive(Clone)]
 pub struct EventBus {
     tx: broadcast::Sender<DomainEvent>,
     pool: PgPool,

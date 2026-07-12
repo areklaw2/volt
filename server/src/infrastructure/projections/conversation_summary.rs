@@ -15,7 +15,7 @@ pub async fn project_conversation_summary(pool: &PgPool, event: &DomainEvent) ->
                WHERE conversation_id = $2 AND user_id = $3",
             Uuid::from(up_to.clone()),
             Uuid::from(conversation_id.clone()),
-            user_id.to_string()
+            Uuid::from(user_id.clone())
         )
         .execute(pool)
         .await?;
