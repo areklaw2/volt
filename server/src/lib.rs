@@ -28,6 +28,8 @@ pub struct AppState {
     pub create_conversation: CreateConversationHandler<SqlxConversationRepository, EventBus>,
     pub send_message: Arc<SendMessageHandler<SqlxConversationRepository, SqlxMessageRepository, EventBus>>,
     pub mark_read: MarkReadHandler<EventBus>,
+    pub upload_dir: String,
+    pub public_url: String,
 }
 
 pub async fn configure_state(config: &AppConfig) -> Result<Arc<AppState>, anyhow::Error> {
@@ -36,6 +38,8 @@ pub async fn configure_state(config: &AppConfig) -> Result<Arc<AppState>, anyhow
         .acquire_timeout(Duration::from_secs(3))
         .connect(config.database_url.expose_secret())
         .await?;
+
+    tokio::fs::create_dir_all(&config.upload_dir).await?;
 
     let event_bus = EventBus::new(pool.clone());
     let users_repo = SqlxUserRepository::new(pool.clone());
@@ -61,6 +65,8 @@ pub async fn configure_state(config: &AppConfig) -> Result<Arc<AppState>, anyhow
         create_conversation,
         send_message,
         mark_read,
+        upload_dir: config.upload_dir.clone(),
+        public_url: config.public_url.clone(),
     });
 
     Ok(state)

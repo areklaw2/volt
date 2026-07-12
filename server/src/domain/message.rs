@@ -64,6 +64,7 @@ impl Message {
             conversation_id,
             sender_id,
             content: message.content.clone(),
+            kind: message.kind.clone(),
             created_at: message.created_at,
         };
         Ok((message, event))
@@ -177,12 +178,14 @@ mod tests {
                 conversation_id: event_conversation_id,
                 sender_id: event_sender_id,
                 content,
+                kind,
                 created_at,
             } => {
                 assert_eq!(message_id, id);
                 assert_eq!(event_conversation_id, conversation_id);
                 assert_eq!(event_sender_id, sender_id);
                 assert_eq!(content, "hello");
+                assert_eq!(kind, MessageKind::Text);
                 assert_eq!(created_at, message.created_at);
             }
             _ => panic!("expected MessageSent event"),

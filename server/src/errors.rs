@@ -1,5 +1,6 @@
 use axum::{
     Json,
+    extract::multipart::MultipartError,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -18,6 +19,13 @@ impl AppError {
         Self {
             message: msg.to_string(),
             status: StatusCode::NOT_FOUND,
+        }
+    }
+
+    pub fn bad_request(msg: impl std::fmt::Display) -> Self {
+        Self {
+            message: msg.to_string(),
+            status: StatusCode::BAD_REQUEST,
         }
     }
 }
@@ -80,5 +88,11 @@ impl From<message_history::QueryError> for AppError {
             message: "internal server error".to_string(),
             status: StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+
+impl From<MultipartError> for AppError {
+    fn from(err: MultipartError) -> Self {
+        Self::bad_request(err)
     }
 }

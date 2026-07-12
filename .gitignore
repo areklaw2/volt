@@ -572,4 +572,6 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/vs,rust,linux,macos,react,dotenv,windows,jetbrains+all,visualstudiocode
 
 .vscode
+server/uploads/*
+!server/uploads/.gitkeep
 

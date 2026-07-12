@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 
 use crate::domain::ids::{ConversationId, MessageId, UserId};
+use crate::domain::message::MessageKind;
 
 #[derive(Debug, Clone)]
 pub enum DomainEvent {
@@ -9,6 +10,7 @@ pub enum DomainEvent {
         conversation_id: ConversationId,
         sender_id: UserId,
         content: String,
+        kind: MessageKind,
         created_at: DateTime<Utc>,
     },
     MessageEdited {

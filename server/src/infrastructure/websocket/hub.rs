@@ -16,6 +16,8 @@ struct IncomingMessage {
     conversation_id: String,
     sender_id: String,
     content: String,
+    #[serde(default)]
+    kind: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -24,6 +26,7 @@ struct OutgoingMessage {
     conversation_id: String,
     sender_id: String,
     content: String,
+    kind: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
@@ -49,11 +52,16 @@ pub async fn handle_socket<C, M, P>(
                 let Ok(conversation_id) = Uuid::parse_str(&payload.conversation_id) else { continue };
                 let Ok(sender_id) = Uuid::parse_str(&payload.sender_id) else { continue };
 
+                let kind = match payload.kind.as_deref() {
+                    Some("image") => MessageKind::Image,
+                    _ => MessageKind::Text,
+                };
+
                 let command = SendMessageCommand {
                     conversation_id: ConversationId::from_persistence(conversation_id),
                     sender_id: UserId::from_persistence(sender_id),
                     content: payload.content,
-                    kind: MessageKind::Text,
+                    kind,
                 };
 
                 if let Err(err) = send_message.handle(command).await {
@@ -67,7 +75,7 @@ pub async fn handle_socket<C, M, P>(
                     Err(broadcast::error::RecvError::Closed) => break,
                 };
 
-                let DomainEvent::MessageSent { message_id, conversation_id, sender_id, content, created_at } = &event else {
+                let DomainEvent::MessageSent { message_id, conversation_id, sender_id, content, kind, created_at } = &event else {
                     continue;
                 };
 
@@ -76,11 +84,17 @@ pub async fn handle_socket<C, M, P>(
                     _ => continue,
                 }
 
+                let kind_str = match kind {
+                    MessageKind::Text => "text",
+                    MessageKind::Image => "image",
+                };
+
                 let payload = OutgoingMessage {
                     id: message_id.to_string(),
                     conversation_id: conversation_id.to_string(),
                     sender_id: sender_id.to_string(),
                     content: content.clone(),
+                    kind: kind_str.to_string(),
                     created_at: *created_at,
                     updated_at: None,
                 };
