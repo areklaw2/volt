@@ -16,8 +16,13 @@ pub enum DomainEvent {
     MessageEdited {
         message_id: MessageId,
         conversation_id: ConversationId,
+        content: String,
     },
     ParticipantAdded {
+        conversation_id: ConversationId,
+        user_id: UserId,
+    },
+    ParticipantRemoved {
         conversation_id: ConversationId,
         user_id: UserId,
     },

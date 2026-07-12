@@ -68,6 +68,17 @@ impl ConversationRepository for SqlxConversationRepository {
         .execute(&mut *tx)
         .await?;
 
+        let current_ids: Vec<Uuid> = c.participants().iter().map(|p| Uuid::from(p.user_id.clone())).collect();
+
+        // drop rows for participants no longer in the aggregate (e.g. after remove_participant)
+        sqlx::query!(
+            "DELETE FROM user_conversations WHERE conversation_id = $1 AND user_id <> ALL($2)",
+            Uuid::from(c.id().clone()),
+            &current_ids
+        )
+        .execute(&mut *tx)
+        .await?;
+
         for participant in c.participants() {
             sqlx::query!(
                 "INSERT INTO user_conversations (user_id, conversation_id, joined_at)

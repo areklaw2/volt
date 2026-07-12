@@ -11,7 +11,10 @@ use uuid::Uuid;
 
 use crate::{
     AppState,
-    application::commands::{create_conversation::CreateConversationCommand, mark_message_read::MarkMessageReadCommand},
+    application::commands::{
+        create_conversation::CreateConversationCommand, leave_conversation::LeaveConversationCommand,
+        mark_message_read::MarkMessageReadCommand,
+    },
     application::queries::conversation_list::ConversationViewQueries,
     domain::conversation::ConversationKind,
     domain::ids::{ConversationId, MessageId, UserId},
@@ -95,6 +98,18 @@ pub async fn mark_as_read(
             })
             .await?;
     }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn leave_conversation(
+    State(state): State<Arc<AppState>>,
+    Path((id, user_id)): Path<(String, String)>,
+) -> Result<impl IntoResponse, AppError> {
+    let conversation_id = ConversationId::from_persistence(parse_uuid(&id)?);
+    let user_id = UserId::from_persistence(parse_uuid(&user_id)?);
+
+    state.leave_conversation.handle(LeaveConversationCommand { conversation_id, user_id }).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

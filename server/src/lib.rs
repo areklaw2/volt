@@ -12,6 +12,7 @@ use sqlx::postgres::PgPoolOptions;
 
 use crate::{
     application::commands::create_conversation::CreateConversationHandler, application::commands::create_user::CreateUserHandler,
+    application::commands::edit_message::EditMessageHandler, application::commands::leave_conversation::LeaveConversationHandler,
     application::commands::mark_message_read::MarkReadHandler, application::commands::send_message::SendMessageHandler,
     config::AppConfig, infrastructure::events::bus::EventBus,
     infrastructure::postgres::conversation_repository::SqlxConversationRepository,
@@ -27,6 +28,8 @@ pub struct AppState {
     pub create_user: CreateUserHandler<SqlxUserRepository>,
     pub create_conversation: CreateConversationHandler<SqlxConversationRepository, EventBus>,
     pub send_message: Arc<SendMessageHandler<SqlxConversationRepository, SqlxMessageRepository, EventBus>>,
+    pub edit_message: EditMessageHandler<SqlxMessageRepository, EventBus>,
+    pub leave_conversation: LeaveConversationHandler<SqlxConversationRepository, EventBus>,
     pub mark_read: MarkReadHandler<EventBus>,
     pub upload_dir: String,
     pub public_url: String,
@@ -54,6 +57,8 @@ pub async fn configure_state(config: &AppConfig) -> Result<Arc<AppState>, anyhow
         messages_repo.clone(),
         event_bus.clone(),
     ));
+    let edit_message = EditMessageHandler::new(messages_repo.clone(), event_bus.clone());
+    let leave_conversation = LeaveConversationHandler::new(conversations_repo.clone(), event_bus.clone());
     let mark_read = MarkReadHandler::new(event_bus.clone());
 
     let state = Arc::new(AppState {
@@ -64,6 +69,8 @@ pub async fn configure_state(config: &AppConfig) -> Result<Arc<AppState>, anyhow
         create_user,
         create_conversation,
         send_message,
+        edit_message,
+        leave_conversation,
         mark_read,
         upload_dir: config.upload_dir.clone(),
         public_url: config.public_url.clone(),

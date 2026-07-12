@@ -77,12 +77,16 @@ impl Message {
         if new_content.trim().is_empty() {
             return Err(DomainError::EmptyMessage);
         }
+        if matches!(self.kind, MessageKind::Image) && !looks_like_url(&new_content) {
+            return Err(DomainError::ImageNeedsUrl);
+        }
         self.content = new_content;
         self.edited = true;
         self.updated_at = Some(Utc::now());
         Ok(DomainEvent::MessageEdited {
             message_id: self.id.clone(),
             conversation_id: self.conversation_id.clone(),
+            content: self.content.clone(),
         })
     }
 
@@ -241,6 +245,23 @@ mod tests {
     }
 
     #[test]
+    fn edit_rejects_non_url_content_for_image_message() {
+        let sender_id = UserId::new();
+        let (mut message, _event) = Message::new(
+            MessageId::new(),
+            ConversationId::new(),
+            sender_id.clone(),
+            "https://example.com/img.png".to_string(),
+            MessageKind::Image,
+        )
+        .unwrap();
+
+        let result = message.edit(&sender_id, "not a url".to_string());
+
+        assert_eq!(result.err(), Some(DomainError::ImageNeedsUrl));
+    }
+
+    #[test]
     fn edit_updates_content_and_emits_event() {
         let id = MessageId::new();
         let conversation_id = ConversationId::new();
@@ -264,9 +285,11 @@ mod tests {
             DomainEvent::MessageEdited {
                 message_id,
                 conversation_id: event_conversation_id,
+                content,
             } => {
                 assert_eq!(message_id, id);
                 assert_eq!(event_conversation_id, conversation_id);
+                assert_eq!(content, "updated");
             }
             _ => panic!("expected MessageEdited event"),
         }

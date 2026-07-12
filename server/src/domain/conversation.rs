@@ -100,6 +100,22 @@ impl Conversation {
         })
     }
 
+    pub fn remove_participant(&mut self, user_id: &UserId) -> Result<DomainEvent, DomainError> {
+        if matches!(self.kind, ConversationKind::Direct) {
+            return Err(DomainError::CannotLeaveDirect);
+        }
+
+        if !self.is_participant(user_id) {
+            return Err(DomainError::NotAParticipant);
+        }
+
+        self.participants.retain(|p| &p.user_id != user_id);
+        Ok(DomainEvent::ParticipantRemoved {
+            conversation_id: self.id.clone(),
+            user_id: user_id.clone(),
+        })
+    }
+
     pub(crate) fn from_persistence(
         id: ConversationId,
         kind: ConversationKind,
@@ -233,6 +249,49 @@ mod tests {
         let result = convo.add_participant(creator);
 
         assert_eq!(result.err(), Some(DomainError::AlreadyParticipant));
+    }
+
+    #[test]
+    fn remove_participant_removes_member_and_emits_event() {
+        let creator = UserId::new();
+        let member = UserId::new();
+        let conversation_id = ConversationId::new();
+        let mut convo = Conversation::new_group(conversation_id.clone(), "The Group Chat".into(), creator).unwrap();
+        convo.add_participant(member.clone()).unwrap();
+
+        let event = convo.remove_participant(&member).unwrap();
+
+        assert!(!convo.is_participant(&member));
+        match event {
+            DomainEvent::ParticipantRemoved {
+                conversation_id: event_conversation_id,
+                user_id,
+            } => {
+                assert_eq!(event_conversation_id, conversation_id);
+                assert_eq!(user_id, member);
+            }
+            _ => panic!("expected ParticipantRemoved event"),
+        }
+    }
+
+    #[test]
+    fn remove_participant_rejects_direct_conversation() {
+        let a = UserId::new();
+        let mut convo = Conversation::new_direct(ConversationId::new(), a.clone(), UserId::new()).unwrap();
+
+        let result = convo.remove_participant(&a);
+
+        assert_eq!(result.err(), Some(DomainError::CannotLeaveDirect));
+    }
+
+    #[test]
+    fn remove_participant_rejects_non_participant() {
+        let creator = UserId::new();
+        let mut convo = Conversation::new_group(ConversationId::new(), "The Group Chat".into(), creator).unwrap();
+
+        let result = convo.remove_participant(&UserId::new());
+
+        assert_eq!(result.err(), Some(DomainError::NotAParticipant));
     }
 
     #[test]

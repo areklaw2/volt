@@ -14,8 +14,8 @@ use crate::{
     config::AppConfig,
     handlers::{
         chat::chat,
-        conversation::{create_conversation, mark_as_read, query_conversations_by_user},
-        messages::query_messages,
+        conversation::{create_conversation, leave_conversation, mark_as_read, query_conversations_by_user},
+        messages::{edit_message, query_messages},
         upload::upload_image,
         user::{create_or_read_user, get_users},
     },
@@ -31,11 +31,12 @@ fn conversation_routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/conversation", post(create_conversation))
         .route("/conversation/{id}/read/{user_id}", post(mark_as_read))
+        .route("/conversation/{id}/leave/{user_id}", post(leave_conversation))
         .route("/conversations/{user_id}", get(query_conversations_by_user))
 }
 
 fn message_routes() -> Router<Arc<AppState>> {
-    Router::new().route("/messages/{conversation_id}", get(query_messages))
+    Router::new().route("/messages/{id}", get(query_messages).patch(edit_message))
 }
 
 fn chat_routes() -> Router<Arc<AppState>> {

@@ -8,6 +8,8 @@ pub enum DomainError {
     GroupNeedsTitle,
     #[error("cannot add participant to a direct conversation")]
     CannotAddToDirect,
+    #[error("cannot leave a direct conversation")]
+    CannotLeaveDirect,
     #[error("user is already a participant")]
     AlreadyParticipant,
     #[error("message content cannot be empty")]
@@ -18,6 +20,8 @@ pub enum DomainError {
     NotYourMessage,
     #[error("conversation not found")]
     ConversationNotFound,
+    #[error("message not found")]
+    MessageNotFound,
     #[error("user is not a participant of this conversation")]
     NotAParticipant,
     #[error("username cannot be empty")]
