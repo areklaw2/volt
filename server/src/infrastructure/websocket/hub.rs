@@ -6,6 +6,7 @@ use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use crate::application::commands::send_message::{SendMessageCommand, SendMessageHandler};
+use crate::application::queries::conversation_list::ConversationViewQueries;
 use crate::domain::events::DomainEvent;
 use crate::domain::ids::{ConversationId, UserId};
 use crate::domain::message::MessageKind;
@@ -31,16 +32,18 @@ struct OutgoingMessage {
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-pub async fn handle_socket<C, M, P>(
+pub async fn handle_socket<C, M, P, V>(
     socket: WebSocket,
     user_id: UserId,
     pool: PgPool,
     send_message: std::sync::Arc<SendMessageHandler<C, M, P>>,
+    views: V,
     mut rx: broadcast::Receiver<DomainEvent>,
 ) where
     C: ConversationRepository,
     M: MessageRepository,
     P: EventPublisher,
+    V: ConversationViewQueries,
 {
     let (mut sink, mut stream) = socket.split();
 
@@ -75,30 +78,41 @@ pub async fn handle_socket<C, M, P>(
                     Err(broadcast::error::RecvError::Closed) => break,
                 };
 
-                let DomainEvent::MessageSent { message_id, conversation_id, sender_id, content, kind, created_at } = &event else {
-                    continue;
-                };
+                let json = match &event {
+                    DomainEvent::MessageSent { message_id, conversation_id, sender_id, content, kind, created_at } => {
+                        match user_is_in(&pool, &user_id, conversation_id).await {
+                            Ok(true) => {}
+                            _ => continue,
+                        }
 
-                match user_is_in(&pool, &user_id, conversation_id).await {
-                    Ok(true) => {}
+                        let kind_str = match kind {
+                            MessageKind::Text => "text",
+                            MessageKind::Image => "image",
+                        };
+
+                        let payload = OutgoingMessage {
+                            id: message_id.to_string(),
+                            conversation_id: conversation_id.to_string(),
+                            sender_id: sender_id.to_string(),
+                            content: content.clone(),
+                            kind: kind_str.to_string(),
+                            created_at: *created_at,
+                            updated_at: None,
+                        };
+
+                        serde_json::to_string(&serde_json::json!({ "type": "message", "message": payload }))
+                    }
+                    // fires for both brand-new conversations and later invites — either way, this
+                    // user now belongs to a conversation their client doesn't know about yet, so
+                    // push the full view rather than making them wait for a page refresh.
+                    DomainEvent::ParticipantAdded { conversation_id, user_id: added_user_id } if added_user_id == &user_id => {
+                        let Ok(Some(view)) = views.by_id(conversation_id).await else { continue };
+                        serde_json::to_string(&serde_json::json!({ "type": "conversation", "conversation": view }))
+                    }
                     _ => continue,
-                }
-
-                let kind_str = match kind {
-                    MessageKind::Text => "text",
-                    MessageKind::Image => "image",
                 };
 
-                let payload = OutgoingMessage {
-                    id: message_id.to_string(),
-                    conversation_id: conversation_id.to_string(),
-                    sender_id: sender_id.to_string(),
-                    content: content.clone(),
-                    kind: kind_str.to_string(),
-                    created_at: *created_at,
-                    updated_at: None,
-                };
-                let Ok(json) = serde_json::to_string(&payload) else { continue };
+                let Ok(json) = json else { continue };
 
                 if sink.send(WsMessage::Text(json.into())).await.is_err() {
                     break;

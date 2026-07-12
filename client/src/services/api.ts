@@ -3,27 +3,8 @@ import { env } from '@/lib/env';
 
 const API_BASE = `${env.API_URL}/api/v1`;
 
-let _getToken: (() => Promise<string | null>) | null = null;
-
-export function initializeApi(getToken: () => Promise<string | null>) {
-  _getToken = getToken;
-}
-
 async function sendHttpRequest(path: string, init?: RequestInit): Promise<Response> {
-  if (!_getToken) {
-    throw new Error('API not initialized. Call initApi() first.');
-  }
-
-  const token = await _getToken();
-  if (!token) throw new Error('Unable to get auth token');
-
-  return fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      ...init?.headers,
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  return fetch(`${API_BASE}${path}`, init);
 }
 
 export async function createUser(id: string, username: string, displayName: string): Promise<void> {
@@ -66,6 +47,12 @@ export async function markAsRead(conversationId: string, userId: string): Promis
   });
 }
 
+export async function leaveConversation(conversationId: string, userId: string): Promise<void> {
+  await sendHttpRequest(`/conversation/${conversationId}/leave/${userId}`, {
+    method: 'POST',
+  });
+}
+
 export async function fetchMessages(
   conversationId: string,
   params?: { offset?: number; limit?: number },
@@ -82,5 +69,21 @@ export async function fetchMessages(
 
   const queryString = query.toString();
   const res = await sendHttpRequest(`/messages/${conversationId}${queryString ? `?${queryString}` : ''}`);
+  return res.json();
+}
+
+export async function editMessage(messageId: string, editorId: string, content: string): Promise<void> {
+  await sendHttpRequest(`/messages/${messageId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ editor_id: editorId, content }),
+  });
+}
+
+export async function uploadImage(file: File): Promise<{ url: string }> {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await sendHttpRequest('/upload', { method: 'POST', body: form });
+  if (!res.ok) throw new Error('Failed to upload image');
   return res.json();
 }

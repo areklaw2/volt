@@ -43,13 +43,21 @@ export function MessageItem({ message, currentUserId, participants, showSenderNa
             {sender.display_name}
           </span>
         )}
-        <div
-          className={`rounded-2xl px-3.5 py-2 text-sm ${
-            isOwn ? 'bg-muted' : 'bg-white shadow-sm ring-1 ring-border/50'
-          }`}
-        >
-          {message.content}
-        </div>
+        {message.kind === 'image' ? (
+          <img
+            src={message.content}
+            alt="Shared image"
+            className="max-h-64 max-w-full rounded-2xl object-cover shadow-sm ring-1 ring-border/50"
+          />
+        ) : (
+          <div
+            className={`rounded-2xl px-3.5 py-2 text-sm ${
+              isOwn ? 'bg-muted' : 'bg-white shadow-sm ring-1 ring-border/50'
+            }`}
+          >
+            {message.content}
+          </div>
+        )}
         <span className="mt-0.5 text-[10px] text-muted-foreground">
           {formatTime(message.created_at)}
         </span>

@@ -1,4 +1,4 @@
-import type { Message } from '@/types';
+import type { Message, Conversation } from '@/types';
 import { env } from '@/lib/env';
 
 const WS_BASE = `${env.WS_URL}/api/v1`;
@@ -6,7 +6,12 @@ const WS_BASE = `${env.WS_URL}/api/v1`;
 let _ws: WebSocket | null = null;
 let _pending: string[] = [];
 
-export function connectWebSocket(userId: string, onMessage: (message: Message) => void): void {
+interface WsHandlers {
+  onMessage: (message: Message) => void;
+  onConversation: (conversation: Conversation) => void;
+}
+
+export function connectWebSocket(userId: string, handlers: WsHandlers): void {
   if (_ws) {
     disconnectWebSocket();
   }
@@ -23,8 +28,12 @@ export function connectWebSocket(userId: string, onMessage: (message: Message) =
 
   ws.onmessage = (event) => {
     try {
-      const msg: Message = JSON.parse(event.data);
-      onMessage(msg);
+      const envelope = JSON.parse(event.data);
+      if (envelope.type === 'message') {
+        handlers.onMessage(envelope.message as Message);
+      } else if (envelope.type === 'conversation') {
+        handlers.onConversation(envelope.conversation as Conversation);
+      }
     } catch {
       // ignore unparseable messages
     }
@@ -35,8 +44,8 @@ export function connectWebSocket(userId: string, onMessage: (message: Message) =
   };
 }
 
-export function sendMessage(conversationId: string, senderId: string, content: string): void {
-  const payload = JSON.stringify({ conversation_id: conversationId, sender_id: senderId, content });
+export function sendMessage(conversationId: string, senderId: string, content: string, kind: 'text' | 'image' = 'text'): void {
+  const payload = JSON.stringify({ conversation_id: conversationId, sender_id: senderId, content, kind });
   if (!_ws) {
     return;
   }

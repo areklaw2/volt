@@ -21,6 +21,8 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   onSelectConversation: (id: string) => void;
   conversations: Conversation[];
   currentUserId: string;
+  displayName: string;
+  onSignOut: () => void;
   onCreateConversation: (conversation: Conversation) => void;
   unreadCounts?: Record<string, number>;
 }
@@ -30,6 +32,8 @@ export function AppSidebar({
   onSelectConversation,
   conversations: conversationsProp,
   currentUserId,
+  displayName,
+  onSignOut,
   onCreateConversation,
   unreadCounts,
   ...props
@@ -93,7 +97,7 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <NavUser />
+        <NavUser displayName={displayName} onSignOut={onSignOut} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

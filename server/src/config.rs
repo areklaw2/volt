@@ -16,8 +16,8 @@ impl AppConfig {
 
         let database_url = std::env::var("DATABASE_URL").map_err(|e| ConfigError::MissingEnv(e.to_string()))?;
         let port = std::env::var("PORT").ok().and_then(|v| v.parse::<u16>().ok()).unwrap_or(3000);
-        let upload_dir = std::env::var("UPLOAD_DIR").unwrap_or_else(|_| "uploads".to_string());
-        let public_url = std::env::var("PUBLIC_URL").unwrap_or_else(|_| format!("http://127.0.0.1:{port}"));
+        let upload_dir = non_empty_env("UPLOAD_DIR").unwrap_or_else(|| "uploads".to_string());
+        let public_url = non_empty_env("PUBLIC_URL").unwrap_or_else(|| format!("http://127.0.0.1:{port}"));
 
         Ok(AppConfig {
             database_url: database_url.into(),
@@ -26,6 +26,10 @@ impl AppConfig {
             public_url,
         })
     }
+}
+
+fn non_empty_env(key: &str) -> Option<String> {
+    std::env::var(key).ok().filter(|v| !v.is_empty())
 }
 
 #[derive(Debug, Error)]

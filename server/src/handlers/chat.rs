@@ -13,6 +13,7 @@ pub async fn chat(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>, Path
     let rx = state.event_bus.subscribe();
     let pool = state.pool.clone();
     let send_message = state.send_message.clone();
+    let views = state.views.clone();
 
-    ws.on_upgrade(move |socket| hub::handle_socket(socket, user_id, pool, send_message, rx))
+    ws.on_upgrade(move |socket| hub::handle_socket(socket, user_id, pool, send_message, views, rx))
 }

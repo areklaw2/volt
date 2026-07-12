@@ -7,6 +7,8 @@ interface AppLayoutProps {
   onSelectConversation: (id: string) => void;
   conversations: Conversation[];
   currentUserId: string;
+  displayName: string;
+  onSignOut: () => void;
   onCreateConversation: (conversation: Conversation) => void;
   unreadCounts?: Record<string, number>;
   children: React.ReactNode;
@@ -17,6 +19,8 @@ export function AppLayout({
   onSelectConversation,
   conversations,
   currentUserId,
+  displayName,
+  onSignOut,
   onCreateConversation,
   unreadCounts,
   children,
@@ -28,6 +32,8 @@ export function AppLayout({
         onSelectConversation={onSelectConversation}
         conversations={conversations}
         currentUserId={currentUserId}
+        displayName={displayName}
+        onSignOut={onSignOut}
         onCreateConversation={onCreateConversation}
         unreadCounts={unreadCounts}
       />

@@ -1,4 +1,4 @@
-import type { Message, Participant } from '@/types';
+import type { Message } from '@/types';
 
 export const currentUser = {
   id: 'u-current',
@@ -54,20 +54,6 @@ function daysAgo(d: number, hours = 0, minutes = 0): string {
   return date.toISOString();
 }
 
-function toParticipant(
-  user: { id: string; username: string; display_name: string },
-  joined_at: string,
-  last_read_at: string | null = null,
-): Participant {
-  return {
-    user_id: user.id,
-    username: user.username,
-    display_name: user.display_name,
-    joined_at,
-    last_read_at,
-  };
-}
-
 // --- Messages per conversation ---
 
 const conv1Messages: Message[] = [
@@ -76,6 +62,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-1',
     content: 'Hey! Are you coming to the standup today?',
+    kind: 'text',
     created_at: daysAgo(1, 9, 0),
     updated_at: null,
   },
@@ -84,6 +71,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-current',
     content: "Yeah, I'll be there in 5 minutes",
+    kind: 'text',
     created_at: daysAgo(1, 9, 2),
     updated_at: null,
   },
@@ -92,6 +80,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-1',
     content: 'Cool. I want to discuss the new API changes',
+    kind: 'text',
     created_at: daysAgo(1, 9, 3),
     updated_at: null,
   },
@@ -100,6 +89,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-current',
     content: 'Sounds good. I pushed the PR last night',
+    kind: 'text',
     created_at: daysAgo(1, 9, 5),
     updated_at: null,
   },
@@ -108,6 +98,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-1',
     content: "Perfect, I'll review it before the meeting",
+    kind: 'text',
     created_at: daysAgo(1, 9, 6),
     updated_at: null,
   },
@@ -116,6 +107,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-1',
     content: 'Just finished reviewing. Looks great overall!',
+    kind: 'text',
     created_at: daysAgo(0, 10, 15),
     updated_at: null,
   },
@@ -124,6 +116,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-current',
     content: 'Thanks! Any comments I should address?',
+    kind: 'text',
     created_at: daysAgo(0, 10, 20),
     updated_at: null,
   },
@@ -132,6 +125,7 @@ const conv1Messages: Message[] = [
     conversation_id: 'c-1',
     sender_id: 'u-1',
     content: 'Left a couple of minor suggestions, nothing blocking',
+    kind: 'text',
     created_at: daysAgo(0, 10, 22),
     updated_at: null,
   },
@@ -143,6 +137,7 @@ const conv2Messages: Message[] = [
     conversation_id: 'c-2',
     sender_id: 'u-2',
     content: 'Did you see the game last night?',
+    kind: 'text',
     created_at: daysAgo(2, 20, 0),
     updated_at: null,
   },
@@ -151,6 +146,7 @@ const conv2Messages: Message[] = [
     conversation_id: 'c-2',
     sender_id: 'u-current',
     content: 'No I missed it! What happened?',
+    kind: 'text',
     created_at: daysAgo(2, 20, 5),
     updated_at: null,
   },
@@ -159,6 +155,7 @@ const conv2Messages: Message[] = [
     conversation_id: 'c-2',
     sender_id: 'u-2',
     content: 'Overtime win, it was incredible',
+    kind: 'text',
     created_at: daysAgo(2, 20, 6),
     updated_at: null,
   },
@@ -167,6 +164,7 @@ const conv2Messages: Message[] = [
     conversation_id: 'c-2',
     sender_id: 'u-current',
     content: 'Ugh I need to watch the replay',
+    kind: 'text',
     created_at: daysAgo(2, 20, 10),
     updated_at: null,
   },
@@ -175,6 +173,7 @@ const conv2Messages: Message[] = [
     conversation_id: 'c-2',
     sender_id: 'u-2',
     content: "I'll send you the link",
+    kind: 'text',
     created_at: daysAgo(2, 20, 11),
     updated_at: null,
   },
@@ -183,6 +182,7 @@ const conv2Messages: Message[] = [
     conversation_id: 'c-2',
     sender_id: 'u-2',
     content: 'Here: check your email',
+    kind: 'text',
     created_at: daysAgo(2, 20, 15),
     updated_at: null,
   },
@@ -194,6 +194,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-3',
     content: "Team, let's plan the sprint",
+    kind: 'text',
     created_at: daysAgo(3, 14, 0),
     updated_at: null,
   },
@@ -202,6 +203,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-1',
     content: 'I can take the auth tickets',
+    kind: 'text',
     created_at: daysAgo(3, 14, 5),
     updated_at: null,
   },
@@ -210,6 +212,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-current',
     content: "I'll handle the frontend components",
+    kind: 'text',
     created_at: daysAgo(3, 14, 8),
     updated_at: null,
   },
@@ -218,6 +221,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-4',
     content: 'I can do the database migrations',
+    kind: 'text',
     created_at: daysAgo(3, 14, 10),
     updated_at: null,
   },
@@ -226,6 +230,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-3',
     content: "Great. Let's aim to finish by Thursday",
+    kind: 'text',
     created_at: daysAgo(3, 14, 15),
     updated_at: null,
   },
@@ -234,6 +239,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-current',
     content: 'Works for me',
+    kind: 'text',
     created_at: daysAgo(3, 14, 16),
     updated_at: null,
   },
@@ -242,6 +248,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-1',
     content: 'Same here',
+    kind: 'text',
     created_at: daysAgo(3, 14, 17),
     updated_at: null,
   },
@@ -250,6 +257,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-4',
     content: 'Thursday it is!',
+    kind: 'text',
     created_at: daysAgo(3, 14, 18),
     updated_at: null,
   },
@@ -258,6 +266,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-3',
     content: 'Quick update: auth is almost done',
+    kind: 'text',
     created_at: daysAgo(1, 11, 0),
     updated_at: null,
   },
@@ -266,6 +275,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-1',
     content: "Nice! I'll push the PR today",
+    kind: 'text',
     created_at: daysAgo(1, 11, 5),
     updated_at: null,
   },
@@ -274,6 +284,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-current',
     content: 'Frontend is on track too',
+    kind: 'text',
     created_at: daysAgo(1, 11, 10),
     updated_at: null,
   },
@@ -282,6 +293,7 @@ const conv3Messages: Message[] = [
     conversation_id: 'c-3',
     sender_id: 'u-3',
     content: "Awesome, we're in good shape",
+    kind: 'text',
     created_at: daysAgo(1, 11, 12),
     updated_at: null,
   },
@@ -293,6 +305,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-5',
     content: 'Welcome to the watercooler chat!',
+    kind: 'text',
     created_at: daysAgo(5, 10, 0),
     updated_at: null,
   },
@@ -301,6 +314,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-2',
     content: 'Anyone tried the new coffee machine?',
+    kind: 'text',
     created_at: daysAgo(4, 9, 0),
     updated_at: null,
   },
@@ -309,6 +323,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-current',
     content: 'Yes! The espresso is actually good now',
+    kind: 'text',
     created_at: daysAgo(4, 9, 15),
     updated_at: null,
   },
@@ -317,6 +332,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-3',
     content: 'I still prefer pour-over',
+    kind: 'text',
     created_at: daysAgo(4, 9, 20),
     updated_at: null,
   },
@@ -325,6 +341,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-5',
     content: "There's a new lunch spot on 5th street",
+    kind: 'text',
     created_at: daysAgo(2, 12, 0),
     updated_at: null,
   },
@@ -333,6 +350,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-current',
     content: 'Oh nice, what kind of food?',
+    kind: 'text',
     created_at: daysAgo(2, 12, 5),
     updated_at: null,
   },
@@ -341,6 +359,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-5',
     content: "Thai fusion, it's really good",
+    kind: 'text',
     created_at: daysAgo(2, 12, 10),
     updated_at: null,
   },
@@ -349,6 +368,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-2',
     content: "Let's go tomorrow!",
+    kind: 'text',
     created_at: daysAgo(2, 12, 15),
     updated_at: null,
   },
@@ -357,6 +377,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-4',
     content: 'Count me in',
+    kind: 'text',
     created_at: daysAgo(2, 12, 20),
     updated_at: null,
   },
@@ -365,6 +386,7 @@ const conv4Messages: Message[] = [
     conversation_id: 'c-4',
     sender_id: 'u-current',
     content: 'Same, sounds great',
+    kind: 'text',
     created_at: daysAgo(2, 12, 22),
     updated_at: null,
   },
@@ -382,14 +404,3 @@ export function getLastMessage(conversationId: string): Message | undefined {
   return msgs?.[msgs.length - 1];
 }
 
-export function getUnreadCount(conversationId: string, userId: string): number {
-  // const conv = conversations.find((c) => c.id === conversationId);
-  // if (!conv) return 0;
-  // const participant = conv.participants.find((p) => p.user_id === userId);
-  // if (!participant?.last_read_at) return 0;
-  // const msgs = messagesByConversation[conversationId] ?? [];
-  // return msgs.filter((m) => m.sender_id !== userId && new Date(m.created_at) > new Date(participant.last_read_at!))
-  //   .length;
-
-  return 0;
-}
