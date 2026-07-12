@@ -8,7 +8,7 @@ import type { Message, Conversation } from '@/types';
 import { MessageSquare, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLocalIdentity } from '@/hooks/use-local-identity';
-import { fetchConversations, fetchMessages, markAsRead } from '@/services/api';
+import { fetchConversations, fetchMessages, markAsRead, editMessage } from '@/services/api';
 import { connectWebSocket, sendMessage, disconnectWebSocket } from '@/services/ws';
 
 function App() {
@@ -104,6 +104,14 @@ function Chat({ userId, displayName, onSignOut }: { userId: string; displayName:
           setConversations((prev) => markConversationReadLocally(prev, msg.conversation_id, userId, now));
         }
       },
+      onMessageEdited: (edit) => {
+        setMessagesByConversation((prev) => ({
+          ...prev,
+          [edit.conversation_id]: (prev[edit.conversation_id] ?? []).map((m) =>
+            m.id === edit.id ? { ...m, content: edit.content, updated_at: edit.updated_at, edited: true } : m,
+          ),
+        }));
+      },
       onConversation: (conv) => {
         setConversations((prev) => (prev.some((c) => c.id === conv.id) ? prev : [conv, ...prev]));
       },
@@ -137,6 +145,11 @@ function Chat({ userId, displayName, onSignOut }: { userId: string; displayName:
       sendMessage(currentConversationId, userId, content, kind);
     },
     [currentConversationId, userId],
+  );
+
+  const handleEditMessage = useCallback(
+    (messageId: string, content: string) => editMessage(messageId, userId, content),
+    [userId],
   );
 
   const handleCreateConversation = useCallback((conversation: Conversation) => {
@@ -193,6 +206,7 @@ function Chat({ userId, displayName, onSignOut }: { userId: string; displayName:
               currentUserId={userId}
               participants={currentConversation.participants}
               isGroup={currentConversation.conversation_type === 'group'}
+              onEditMessage={handleEditMessage}
             />
             <MessageInput onSend={handleSend} />
           </div>

@@ -1,4 +1,4 @@
-import type { Message, Conversation } from '@/types';
+import type { Message, MessageEdit, Conversation } from '@/types';
 import { env } from '@/lib/env';
 
 const WS_BASE = `${env.WS_URL}/api/v1`;
@@ -8,6 +8,7 @@ let _pending: string[] = [];
 
 interface WsHandlers {
   onMessage: (message: Message) => void;
+  onMessageEdited: (edit: MessageEdit) => void;
   onConversation: (conversation: Conversation) => void;
 }
 
@@ -31,6 +32,8 @@ export function connectWebSocket(userId: string, handlers: WsHandlers): void {
       const envelope = JSON.parse(event.data);
       if (envelope.type === 'message') {
         handlers.onMessage(envelope.message as Message);
+      } else if (envelope.type === 'message_edited') {
+        handlers.onMessageEdited(envelope.message_edited as MessageEdit);
       } else if (envelope.type === 'conversation') {
         handlers.onConversation(envelope.conversation as Conversation);
       }

@@ -80,13 +80,15 @@ impl Message {
         if matches!(self.kind, MessageKind::Image) && !looks_like_url(&new_content) {
             return Err(DomainError::ImageNeedsUrl);
         }
+        let updated_at = Utc::now();
         self.content = new_content;
         self.edited = true;
-        self.updated_at = Some(Utc::now());
+        self.updated_at = Some(updated_at);
         Ok(DomainEvent::MessageEdited {
             message_id: self.id.clone(),
             conversation_id: self.conversation_id.clone(),
             content: self.content.clone(),
+            updated_at,
         })
     }
 
@@ -286,10 +288,12 @@ mod tests {
                 message_id,
                 conversation_id: event_conversation_id,
                 content,
+                updated_at,
             } => {
                 assert_eq!(message_id, id);
                 assert_eq!(event_conversation_id, conversation_id);
                 assert_eq!(content, "updated");
+                assert_eq!(Some(updated_at), message.updated_at);
             }
             _ => panic!("expected MessageEdited event"),
         }

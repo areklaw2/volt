@@ -73,11 +73,16 @@ export async function fetchMessages(
 }
 
 export async function editMessage(messageId: string, editorId: string, content: string): Promise<void> {
-  await sendHttpRequest(`/messages/${messageId}`, {
+  const res = await sendHttpRequest(`/messages/${messageId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ editor_id: editorId, content }),
   });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error ?? 'Failed to edit message');
+  }
 }
 
 export async function uploadImage(file: File): Promise<{ url: string }> {

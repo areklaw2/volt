@@ -28,8 +28,17 @@ struct OutgoingMessage {
     sender_id: String,
     content: String,
     kind: String,
+    edited: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+#[derive(Serialize)]
+struct OutgoingEdit {
+    id: String,
+    conversation_id: String,
+    content: String,
+    updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 pub async fn handle_socket<C, M, P, V>(
@@ -96,11 +105,27 @@ pub async fn handle_socket<C, M, P, V>(
                             sender_id: sender_id.to_string(),
                             content: content.clone(),
                             kind: kind_str.to_string(),
+                            edited: false,
                             created_at: *created_at,
                             updated_at: None,
                         };
 
                         serde_json::to_string(&serde_json::json!({ "type": "message", "message": payload }))
+                    }
+                    DomainEvent::MessageEdited { message_id, conversation_id, content, updated_at } => {
+                        match user_is_in(&pool, &user_id, conversation_id).await {
+                            Ok(true) => {}
+                            _ => continue,
+                        }
+
+                        let payload = OutgoingEdit {
+                            id: message_id.to_string(),
+                            conversation_id: conversation_id.to_string(),
+                            content: content.clone(),
+                            updated_at: *updated_at,
+                        };
+
+                        serde_json::to_string(&serde_json::json!({ "type": "message_edited", "message_edited": payload }))
                     }
                     // fires for both brand-new conversations and later invites — either way, this
                     // user now belongs to a conversation their client doesn't know about yet, so

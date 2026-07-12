@@ -7,6 +7,7 @@ interface MessageListProps {
   currentUserId: string;
   participants: Participant[];
   isGroup?: boolean;
+  onEditMessage: (messageId: string, content: string) => Promise<void>;
 }
 
 function formatDateSeparator(dateStr: string): string {
@@ -22,7 +23,7 @@ function formatDateSeparator(dateStr: string): string {
   });
 }
 
-export function MessageList({ messages, currentUserId, participants, isGroup = false }: MessageListProps) {
+export function MessageList({ messages, currentUserId, participants, isGroup = false, onEditMessage }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,7 +54,14 @@ export function MessageList({ messages, currentUserId, participants, isGroup = f
             </div>
             <div className="flex flex-col gap-2">
               {group.messages.map((msg) => (
-                <MessageItem key={msg.id} message={msg} currentUserId={currentUserId} participants={participants} showSenderName={isGroup} />
+                <MessageItem
+                  key={msg.id}
+                  message={msg}
+                  currentUserId={currentUserId}
+                  participants={participants}
+                  showSenderName={isGroup}
+                  onEdit={onEditMessage}
+                />
               ))}
             </div>
           </div>

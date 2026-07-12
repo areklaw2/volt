@@ -30,6 +30,14 @@ export interface Message {
   sender_id: string;
   content: string;
   kind: 'text' | 'image';
+  edited: boolean;
   created_at: string;
   updated_at: string | null;
+}
+
+export interface MessageEdit {
+  id: string;
+  conversation_id: string;
+  content: string;
+  updated_at: string;
 }
